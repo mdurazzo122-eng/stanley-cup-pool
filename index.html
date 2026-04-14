@@ -94,6 +94,10 @@
   .tab { flex: 1; text-align: center; padding: 8px; border-radius: 8px; font-size: 13px; cursor: pointer; color: var(--text2); border: none; background: transparent; transition: all 0.15s; font-weight: 500; }
   .tab.active { background: var(--dark3); color: var(--gold); border: 1px solid var(--border); }
 
+  .entry-tab { padding: 6px 14px; font-size: 13px; font-family: 'Inter', sans-serif; border: 1px solid var(--border2); border-radius: 8px; background: var(--dark2); color: var(--text2); cursor: pointer; transition: all 0.15s; font-weight: 500; }
+  .entry-tab.active { background: var(--dark3); color: var(--gold); border-color: var(--border); }
+  .entry-tab:hover { color: var(--text); }
+
   /* Bracket */
   .bracket-wrap { width: 100%; overflow-x: auto; padding-bottom: 1rem; }
   .bracket-headers { display: grid; grid-template-columns: 160px 130px 120px 110px 120px 130px 160px; min-width: 930px; margin-bottom: 6px; }
@@ -239,14 +243,16 @@ const GAMES = ['4','5','6','7'];
 let currentUser = null;
 let isAdmin = false;
 let view = 'picks';
-let poolSettings = null; // { r1_state, r2_state, ... }
-let allPicks = {}; // { user_id: { r1: { e1: {winner,games}, ... }, ... } }
-let results = {}; // { r1: { e1: {winner,games}, ... } }
-let profiles = {}; // { user_id: { username, is_admin } }
-let tiebreakers = {}; // { user_id: number }
+let poolSettings = null;
+let allEntries = [];        // [{ id, user_id, name, created_at }]
+let allPicks = {};          // { entry_id: { round_id: { series_id: {winner,games} } } }
+let results = {};           // { round_id: { series_id: {winner,games} } }
+let profiles = {};          // { user_id: { username, is_admin } }
+let tiebreakers = {};       // { entry_id: number }
 let loginError = '';
 let regMode = false;
 let saveMsg = '';
+let activeEntryId = null;   // which entry is currently being edited
 
 // ── Boot ───────────────────────────────────────────────────────────
 async function boot() {
@@ -255,7 +261,7 @@ async function boot() {
   render();
   sb.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN') { await loadUser(session.user); render(); }
-    if (event === 'SIGNED_OUT') { currentUser = null; isAdmin = false; render(); }
+    if (event === 'SIGNED_OUT') { currentUser = null; isAdmin = false; allEntries = []; activeEntryId = null; render(); }
   });
 }
 
@@ -264,56 +270,79 @@ async function loadUser(user) {
   const { data } = await sb.from('profiles').select('*').eq('id', user.id).single();
   isAdmin = data?.is_admin || false;
   await refreshData();
+  // Set active entry to first own entry
+  const myEntries = allEntries.filter(e => e.user_id === currentUser.id);
+  if (myEntries.length > 0 && !activeEntryId) activeEntryId = myEntries[0].id;
 }
 
 async function refreshData() {
-  const [settingsRes, picksRes, resultsRes, profilesRes, tbRes] = await Promise.all([
+  const [settingsRes, entriesRes, picksRes, resultsRes, profilesRes, tbRes] = await Promise.all([
     sb.from('pool_settings').select('*').single(),
+    sb.from('entries').select('*').order('created_at'),
     sb.from('picks').select('*'),
     sb.from('results').select('*'),
     sb.from('profiles').select('*'),
     sb.from('tiebreakers').select('*'),
   ]);
   poolSettings = settingsRes.data || { r1_state:'open', r2_state:'locked', r3_state:'locked', r4_state:'locked' };
-  // Build picks map
+  allEntries = entriesRes.data || [];
+  // Build picks map keyed by entry_id
   allPicks = {};
   (picksRes.data || []).forEach(p => {
-    if (!allPicks[p.user_id]) allPicks[p.user_id] = {};
-    if (!allPicks[p.user_id][p.round_id]) allPicks[p.user_id][p.round_id] = {};
-    allPicks[p.user_id][p.round_id][p.series_id] = { winner: p.winner, games: p.games };
+    if (!p.entry_id) return;
+    if (!allPicks[p.entry_id]) allPicks[p.entry_id] = {};
+    if (!allPicks[p.entry_id][p.round_id]) allPicks[p.entry_id][p.round_id] = {};
+    allPicks[p.entry_id][p.round_id][p.series_id] = { winner: p.winner, games: p.games };
   });
-  // Build results map
   results = {};
   (resultsRes.data || []).forEach(r => {
     if (!results[r.round_id]) results[r.round_id] = {};
     results[r.round_id][r.series_id] = { winner: r.winner, games: r.games };
   });
-  // Profiles
   profiles = {};
   (profilesRes.data || []).forEach(p => { profiles[p.id] = p; });
-  // Tiebreakers
   tiebreakers = {};
-  (tbRes.data || []).forEach(t => { tiebreakers[t.user_id] = t.goals; });
+  (tbRes.data || []).forEach(t => {
+    if (t.entry_id) tiebreakers[t.entry_id] = t.goals;
+  });
+}
+
+async function createEntry(name) {
+  const { data, error } = await sb.from('entries').insert({ user_id: currentUser.id, name }).select().single();
+  if (error || !data) return null;
+  await refreshData();
+  activeEntryId = data.id;
+  return data;
+}
+
+async function deleteEntry(entryId) {
+  await sb.from('picks').delete().eq('entry_id', entryId);
+  await sb.from('tiebreakers').delete().eq('entry_id', entryId);
+  await sb.from('entries').delete().eq('id', entryId);
+  await refreshData();
+  const myEntries = allEntries.filter(e => e.user_id === currentUser.id);
+  activeEntryId = myEntries.length > 0 ? myEntries[0].id : null;
 }
 
 function getState(rid) { return poolSettings?.[rid+'_state'] || 'locked'; }
-function myPick(rid, sid) { return allPicks[currentUser?.id]?.[rid]?.[sid] || {}; }
+function myPick(rid, sid) { return allPicks[activeEntryId]?.[rid]?.[sid] || {}; }
+function myEntries() { return allEntries.filter(e => e.user_id === currentUser?.id); }
+
 
 // ── Scoring ────────────────────────────────────────────────────────
 function computeScores() {
+  // Returns { entry_id: pts }
   const scores = {};
   const globalState = getState('r1');
-  // Don't score anything while picks are still open
   if (globalState === 'open') {
-    Object.keys(allPicks).forEach(uid => { scores[uid] = 0; });
+    allEntries.forEach(e => { scores[e.id] = 0; });
     return scores;
   }
-  Object.entries(allPicks).forEach(([uid, userPicks]) => {
+  allEntries.forEach(entry => {
     let total = 0;
     ROUNDS.forEach(r => {
-      const rPicks = userPicks[r.id] || {};
+      const rPicks = allPicks[entry.id]?.[r.id] || {};
       const rResults = results[r.id] || {};
-      // Only score series that have a result entered
       Object.entries(rPicks).forEach(([sid, pick]) => {
         const res = rResults[sid];
         if (!res || !res.winner) return;
@@ -323,7 +352,7 @@ function computeScores() {
         }
       });
     });
-    scores[uid] = total;
+    scores[entry.id] = total;
   });
   return scores;
 }
@@ -520,7 +549,38 @@ function refreshBracket() {
 function renderPicks() {
   const globalState = getState('r1');
   const locked = globalState !== 'open';
-  const myTb = tiebreakers[currentUser.id] || '';
+  const myTb = tiebreakers[activeEntryId] || '';
+  const entries = myEntries();
+
+  // Entry switcher
+  let entrySwitcher = '';
+  if (!locked) {
+    const entryTabs = entries.map(e => `
+      <button class="entry-tab${e.id === activeEntryId ? ' active' : ''}" data-eid="${e.id}">${e.name}</button>
+    `).join('');
+    entrySwitcher = `<div style="margin-bottom:1rem">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px;letter-spacing:1px;text-transform:uppercase">Your entries — $50 buy-in each</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        ${entryTabs}
+        <button id="add_entry_btn" style="padding:6px 12px;font-size:13px;border:1px dashed rgba(201,168,76,0.4);border-radius:8px;background:transparent;color:var(--gold);cursor:pointer">+ Add entry</button>
+      </div>
+      ${entries.length === 0 ? `<div style="margin-top:10px;font-size:13px;color:var(--text2)">You don't have any entries yet. Add one to get started.</div>` : ''}
+    </div>`;
+  } else {
+    // Locked: show entry tabs for viewing
+    const entryTabs = entries.map(e => `
+      <button class="entry-tab${e.id === activeEntryId ? ' active' : ''}" data-eid="${e.id}">${e.name}</button>
+    `).join('');
+    if (entries.length > 1) {
+      entrySwitcher = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1rem">${entryTabs}</div>`;
+    }
+  }
+
+  if (!activeEntryId || entries.length === 0) {
+    return `${entrySwitcher}<div class="card" style="text-align:center;padding:2rem;color:var(--text2)">
+      ${locked ? 'No entries submitted.' : 'Add an entry above to start filling out your bracket.'}
+    </div>`;
+  }
 
   const banner = !locked
     ? `<div class="status-banner open">Pick any matchup to unlock the next round — picks cascade as you go. Nothing saves until you hit Save.</div>`
@@ -716,6 +776,7 @@ function renderPicks() {
   </div>`;
 
   return `
+    ${entrySwitcher}
     ${banner}
     <div class="scroll-hint">← swipe to see full bracket →</div>
     <div class="bracket-wrap">
@@ -775,11 +836,9 @@ function renderAllBrackets() {
     </div>`;
   }
   const scores = computeScores();
-  const userIds = Object.keys(profiles).filter(uid => allPicks[uid]);
-  if (userIds.length === 0) return `<div class="card"><div style="color:var(--text2)">No picks submitted yet.</div></div>`;
+  if (allEntries.length === 0) return `<div class="card"><div style="color:var(--text2)">No picks submitted yet.</div></div>`;
 
-  // Sort by score desc
-  userIds.sort((a,b) => (scores[b]||0) - (scores[a]||0));
+  const sorted = [...allEntries].sort((a,b) => (scores[b.id]||0) - (scores[a.id]||0));
 
   // All series in order — West left, East right (matches bracket layout)
   const SERIES = [
@@ -836,17 +895,20 @@ function renderAllBrackets() {
   });
   html += `</tr></thead><tbody>`;
 
-  userIds.forEach((uid, idx) => {
-    const name = profiles[uid]?.username || uid;
-    const pts = scores[uid] || 0;
-    const tb = tiebreakers[uid] ? ` (TB:${tiebreakers[uid]})` : '';
+  sorted.forEach((entry, idx) => {
+    const owner = profiles[entry.user_id];
+    const name = owner?.username || '?';
+    const multiEntry = allEntries.filter(e => e.user_id === entry.user_id).length > 1;
+    const displayName = multiEntry ? `${name} <span style="color:var(--text2);font-size:10px">${entry.name}</span>` : name;
+    const pts = scores[entry.id] || 0;
+    const tb = tiebreakers[entry.id] ? ` <span style="color:var(--text2);font-size:10px">(TB:${tiebreakers[entry.id]})</span>` : '';
     const bg = idx % 2 === 0 ? 'background:rgba(255,255,255,0.02)' : '';
     html += `<tr style="${bg}">
-      <td style="padding:8px 10px;font-weight:500;white-space:nowrap">${name}${tb?`<span style="color:var(--text2);font-size:10px">${tb}</span>`:''}</td>
+      <td style="padding:8px 10px;font-weight:500;white-space:nowrap">${displayName}${tb}</td>
       <td style="padding:8px 6px;text-align:right;font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--gold2)">${pts}</td>`;
 
     SERIES.forEach((s, i) => {
-      const pick = allPicks[uid]?.[s.rid]?.[s.sid] || {};
+      const pick = allPicks[entry.id]?.[s.rid]?.[s.sid] || {};
       const borderLeft = [0,4,6,7,8,10,11].includes(i) ? 'border-left:1px solid var(--border2);' : '';
       const style = pickStyle(s.rid, s.sid, pick.winner);
       const shortName = pick.winner ? pick.winner.split(' ').pop() : '—';
@@ -915,17 +977,21 @@ function renderRules() {
 function renderLeaderboard() {
   const scores = computeScores();
   const locked = getState('r1') !== 'open';
-  Object.keys(profiles).forEach(uid => { if (scores[uid] == null) scores[uid] = 0; });
-  const sorted = Object.entries(scores).sort((a,b) => b[1]-a[1]);
-  if (sorted.length === 0) return `<div class="card"><div style="color:var(--text2)">No players yet.</div></div>`;
+  if (allEntries.length === 0) return `<div class="card"><div style="color:var(--text2)">No entries yet.</div></div>`;
+
+  const sorted = [...allEntries].sort((a,b) => (scores[b.id]||0) - (scores[a.id]||0));
 
   let html = `<div class="card"><h3>Standings</h3>`;
-  sorted.forEach(([uid, pts], i) => {
-    const name = profiles[uid]?.username || uid;
-    const tb = locked && tiebreakers[uid] ? `TB: ${tiebreakers[uid]} goals` : '';
+  sorted.forEach((entry, i) => {
+    const owner = profiles[entry.user_id];
+    const name = owner?.username || '?';
+    const pts = scores[entry.id] || 0;
+    const tb = locked && tiebreakers[entry.id] ? `TB: ${tiebreakers[entry.id]} goals` : '';
+    const entryLabel = allEntries.filter(e => e.user_id === entry.user_id).length > 1
+      ? `<span style="font-size:11px;color:var(--text2);margin-left:6px">${entry.name}</span>` : '';
     html += `<div class="lb-row">
       <div class="lb-rank${i<3?' top':''}">${i+1}</div>
-      <div class="lb-name">${name}<div class="lb-tb">${tb}</div></div>
+      <div class="lb-name">${name}${entryLabel}<div class="lb-tb">${tb}</div></div>
       <div class="lb-pts">${pts}</div>
     </div>`;
   });
@@ -1058,6 +1124,24 @@ function attachMain() {
     t.onclick = () => { view = t.dataset.tab; saveMsg = ''; render(); };
   });
 
+  // Entry tab switching
+  document.querySelectorAll('.entry-tab').forEach(btn => {
+    btn.onclick = () => { activeEntryId = btn.dataset.eid; render(); };
+  });
+
+  // Add new entry
+  const addEntryBtn = document.getElementById('add_entry_btn');
+  if (addEntryBtn) {
+    addEntryBtn.onclick = async () => {
+      const entries = myEntries();
+      const name = `Entry ${entries.length + 1}`;
+      addEntryBtn.textContent = 'Adding...';
+      addEntryBtn.disabled = true;
+      await createEntry(name);
+      render();
+    };
+  }
+
   // Wire up cascading bracket on initial load
   if (view === 'picks' && getState('r1') === 'open') {
     setTimeout(() => { refreshBracket(); refreshMobileCascade(); }, 0);
@@ -1067,7 +1151,7 @@ function attachMain() {
   const mobileSaveBtn = document.getElementById('save_all_picks_mobile');
   if (mobileSaveBtn) {
     mobileSaveBtn.onclick = async () => {
-      // Sync mobile → desktop selects first
+      if (!activeEntryId) return;
       const allSeries = [
         {rid:'r1',sid:'e1'},{rid:'r1',sid:'e2'},{rid:'r1',sid:'e3'},{rid:'r1',sid:'e4'},
         {rid:'r1',sid:'w1'},{rid:'r1',sid:'w2'},{rid:'r1',sid:'w3'},{rid:'r1',sid:'w4'},
@@ -1077,21 +1161,19 @@ function attachMain() {
       ];
       const upserts = [];
       allSeries.forEach(({rid,sid}) => {
-        const w = document.getElementById(`mpw_${rid}_${sid}`)?.value
-               || document.getElementById(`pw_${rid}_${sid}`)?.value;
-        const g = document.getElementById(`mpg_${rid}_${sid}`)?.value
-               || document.getElementById(`pg_${rid}_${sid}`)?.value;
-        if (w) upserts.push({ user_id: currentUser.id, round_id: rid, series_id: sid, winner: w, games: g || null });
+        const w = document.getElementById(`mpw_${rid}_${sid}`)?.value || document.getElementById(`pw_${rid}_${sid}`)?.value;
+        const g = document.getElementById(`mpg_${rid}_${sid}`)?.value || document.getElementById(`pg_${rid}_${sid}`)?.value;
+        if (w) upserts.push({ entry_id: activeEntryId, user_id: currentUser.id, round_id: rid, series_id: sid, winner: w, games: g || null });
       });
       if (upserts.length > 0) {
-        await sb.from('picks').upsert(upserts, { onConflict: 'user_id,round_id,series_id' });
+        await sb.from('picks').upsert(upserts, { onConflict: 'entry_id,round_id,series_id' });
       }
       const tbEl = document.getElementById('tb_input_mobile') || document.getElementById('tb_input');
       if (tbEl?.value) {
-        await sb.from('tiebreakers').upsert({ user_id: currentUser.id, goals: parseInt(tbEl.value) }, { onConflict: 'user_id' });
+        await sb.from('tiebreakers').upsert({ entry_id: activeEntryId, user_id: currentUser.id, goals: parseInt(tbEl.value) }, { onConflict: 'entry_id' });
       }
       await refreshData();
-      saveMsg = 'All picks saved!';
+      saveMsg = 'Picks saved!';
       render();
       setTimeout(() => { saveMsg = ''; render(); }, 3000);
     };
@@ -1101,28 +1183,29 @@ function attachMain() {
   const saveAllBtn = document.getElementById('save_all_picks');
   if (saveAllBtn) {
     saveAllBtn.onclick = async () => {
+      if (!activeEntryId) return;
       const allSeries = [
-        {rid:'r1', sid:'e1'},{rid:'r1',sid:'e2'},{rid:'r1',sid:'e3'},{rid:'r1',sid:'e4'},
-        {rid:'r1', sid:'w1'},{rid:'r1',sid:'w2'},{rid:'r1',sid:'w3'},{rid:'r1',sid:'w4'},
-        {rid:'r2', sid:'r2_s1'},{rid:'r2',sid:'r2_s2'},{rid:'r2',sid:'r2_s3'},{rid:'r2',sid:'r2_s4'},
-        {rid:'r3', sid:'r3_s1'},{rid:'r3',sid:'r3_s2'},
-        {rid:'r4', sid:'r4_s1'},
+        {rid:'r1',sid:'e1'},{rid:'r1',sid:'e2'},{rid:'r1',sid:'e3'},{rid:'r1',sid:'e4'},
+        {rid:'r1',sid:'w1'},{rid:'r1',sid:'w2'},{rid:'r1',sid:'w3'},{rid:'r1',sid:'w4'},
+        {rid:'r2',sid:'r2_s1'},{rid:'r2',sid:'r2_s2'},{rid:'r2',sid:'r2_s3'},{rid:'r2',sid:'r2_s4'},
+        {rid:'r3',sid:'r3_s1'},{rid:'r3',sid:'r3_s2'},
+        {rid:'r4',sid:'r4_s1'},
       ];
       const upserts = [];
       allSeries.forEach(({rid,sid}) => {
         const w = document.getElementById(`pw_${rid}_${sid}`)?.value;
         const g = document.getElementById(`pg_${rid}_${sid}`)?.value;
-        if (w) upserts.push({ user_id: currentUser.id, round_id: rid, series_id: sid, winner: w, games: g || null });
+        if (w) upserts.push({ entry_id: activeEntryId, user_id: currentUser.id, round_id: rid, series_id: sid, winner: w, games: g || null });
       });
       if (upserts.length > 0) {
-        await sb.from('picks').upsert(upserts, { onConflict: 'user_id,round_id,series_id' });
+        await sb.from('picks').upsert(upserts, { onConflict: 'entry_id,round_id,series_id' });
       }
       const tbEl = document.getElementById('tb_input');
       if (tbEl?.value) {
-        await sb.from('tiebreakers').upsert({ user_id: currentUser.id, goals: parseInt(tbEl.value) }, { onConflict: 'user_id' });
+        await sb.from('tiebreakers').upsert({ entry_id: activeEntryId, user_id: currentUser.id, goals: parseInt(tbEl.value) }, { onConflict: 'entry_id' });
       }
       await refreshData();
-      saveMsg = 'All picks saved!';
+      saveMsg = 'Picks saved!';
       render();
       setTimeout(() => { saveMsg = ''; render(); }, 3000);
     };
