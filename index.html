@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Stanley Cup Pool 2025</title>
+<title>Stanley Cup Pool 2026</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -182,16 +182,18 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // ── Bracket structure ──────────────────────────────────────────────
 // Round 1: 8 known matchups. Rounds 2-4: players predict who advances.
 const R1_MATCHUPS = [
-  // East
-  { id: 'e1', conf: 'East', seed_a: 1, a: 'Florida Panthers',    seed_b: 8, b: 'Tampa Bay Lightning' },
-  { id: 'e2', conf: 'East', seed_a: 2, a: 'Toronto Maple Leafs', seed_b: 7, b: 'Ottawa Senators' },
-  { id: 'e3', conf: 'East', seed_a: 3, a: 'Carolina Hurricanes', seed_b: 6, b: 'New Jersey Devils' },
-  { id: 'e4', conf: 'East', seed_a: 4, a: 'Washington Capitals', seed_b: 5, b: 'Montreal Canadiens' },
-  // West
-  { id: 'w1', conf: 'West', seed_a: 1, a: 'Winnipeg Jets',          seed_b: 8, b: 'St. Louis Blues' },
-  { id: 'w2', conf: 'West', seed_a: 2, a: 'Colorado Avalanche',     seed_b: 7, b: 'Dallas Stars' },
-  { id: 'w3', conf: 'West', seed_a: 3, a: 'Vegas Golden Knights',   seed_b: 6, b: 'Minnesota Wild' },
-  { id: 'w4', conf: 'West', seed_a: 4, a: 'Edmonton Oilers',        seed_b: 5, b: 'LA Kings' },
+  // East - Atlantic
+  { id: 'e1', conf: 'East', seed_a: 1, a: 'Buffalo Sabres',        seed_b: 8, b: 'Boston Bruins' },
+  { id: 'e2', conf: 'East', seed_a: 2, a: 'Montreal Canadiens',    seed_b: 7, b: 'Tampa Bay Lightning' },
+  // East - Metro
+  { id: 'e3', conf: 'East', seed_a: 1, a: 'Carolina Hurricanes',   seed_b: 8, b: 'Ottawa Senators' },
+  { id: 'e4', conf: 'East', seed_a: 2, a: 'Pittsburgh Penguins',   seed_b: 7, b: 'Philadelphia Flyers' },
+  // West - Central
+  { id: 'w1', conf: 'West', seed_a: 1, a: 'Colorado Avalanche',    seed_b: 8, b: 'Los Angeles Kings' },
+  { id: 'w2', conf: 'West', seed_a: 2, a: 'Dallas Stars',          seed_b: 7, b: 'Minnesota Wild' },
+  // West - Pacific
+  { id: 'w3', conf: 'West', seed_a: 1, a: 'Vegas Golden Knights',  seed_b: 8, b: 'Utah Mammoth' },
+  { id: 'w4', conf: 'West', seed_a: 2, a: 'Edmonton Oilers',       seed_b: 7, b: 'Anaheim Ducks' },
 ];
 
 // All NHL playoff teams (for rounds 2+)
@@ -318,7 +320,7 @@ function renderShell() {
   return `
     <div class="header">
       <h1>Stanley Cup Pool</h1>
-      <div class="sub">2025 Playoffs</div>
+      <div class="sub">2026 Playoffs</div>
       <div class="user-row">
         <span style="font-size:13px;color:var(--text2)">${username}</span>
         <button class="btn-sm" id="logout_btn">Sign out</button>
@@ -331,7 +333,7 @@ function renderShell() {
 
 function renderLogin() {
   return `
-    <div class="header"><h1>Stanley Cup Pool</h1><div class="sub">2025 Playoffs</div></div>
+    <div class="header"><h1>Stanley Cup Pool</h1><div class="sub">2026 Playoffs</div></div>
     <div class="login-wrap">
       <h2>${regMode ? 'Create Account' : 'Sign In'}</h2>
       ${loginError ? `<div class="msg-error">${loginError}</div>` : ''}
