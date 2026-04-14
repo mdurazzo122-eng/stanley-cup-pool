@@ -381,8 +381,11 @@ function renderLogin() {
       <label>Password</label>
       <input id="l_pass" type="password" placeholder="••••••••" autocomplete="${regMode?'new-password':'current-password'}" />
       ${regMode ? `<label>Confirm password</label><input id="l_pass2" type="password" placeholder="••••••••" autocomplete="new-password" />` : ''}
-      <button class="btn-gold" id="l_submit" style="width:100%;margin-top:4px">${regMode ? 'Join the Pool' : 'Sign In'}</button>
-      <div style="margin-top:10px;font-size:12px;color:var(--text2);text-align:center;padding:8px;background:var(--dark3);border-radius:6px">Username and password are case sensitive</div>
+      <button class="btn-gold" id="l_submit" style="width:100%;margin-top:4px${regMode ? ';opacity:0.5;pointer-events:none' : ''}" ${regMode ? 'disabled' : ''}>${regMode ? 'Join the Pool' : 'Sign In'}</button>
+      ${regMode ? `<div style="display:flex;align-items:flex-start;gap:10px;margin-top:12px;padding:12px;background:var(--dark3);border-radius:8px;border:1px solid rgba(255,255,255,0.08)">
+        <input type="checkbox" id="case_ack" style="width:18px;height:18px;margin:2px 0 0;flex-shrink:0;cursor:pointer;accent-color:var(--gold)" />
+        <label for="case_ack" style="font-size:13px;color:var(--text);cursor:pointer;line-height:1.5;display:block;margin:0">I understand my <strong>username and password are both case sensitive</strong> — I'll remember exactly how I type them here</label>
+      </div>` : ''}
       <div style="margin-top:12px;font-size:13px;color:var(--text2);text-align:center">
         ${regMode
           ? `Have an account? <span style="color:var(--gold);cursor:pointer" id="l_toggle">Sign in</span>`
@@ -1007,7 +1010,16 @@ function renderAdmin() {
 function attachLogin() {
   document.getElementById('l_submit').onclick = handleLogin;
   document.getElementById('l_toggle').onclick = () => { regMode = !regMode; loginError = ''; render(); };
-  document.querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('l_submit').click(); }));
+  document.querySelectorAll('input[type="text"], input[type="password"]').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('l_submit').click(); }));
+  const checkbox = document.getElementById('case_ack');
+  const submitBtn = document.getElementById('l_submit');
+  if (checkbox && submitBtn) {
+    checkbox.addEventListener('change', () => {
+      submitBtn.disabled = !checkbox.checked;
+      submitBtn.style.opacity = checkbox.checked ? '1' : '0.5';
+      submitBtn.style.pointerEvents = checkbox.checked ? 'auto' : 'none';
+    });
+  }
 }
 
 async function handleLogin() {
