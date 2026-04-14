@@ -290,11 +290,13 @@ function render() {
 
 function renderShell() {
   const username = profiles[currentUser.id]?.username || currentUser.email;
+  const locked = getState('r1') !== 'open';
   const tabs = [
     { id: 'picks', label: 'My Bracket' },
     { id: 'leaderboard', label: 'Leaderboard' },
-    { id: 'rules', label: 'Rules' },
   ];
+  if (locked) tabs.push({ id: 'brackets', label: 'All Brackets' });
+  tabs.push({ id: 'rules', label: 'Rules' });
   if (isAdmin) tabs.push({ id: 'admin', label: 'Admin' });
   const tabHtml = tabs.map(t =>
     `<button class="tab${view===t.id?' active':''}" data-tab="${t.id}">${t.label}</button>`
@@ -302,6 +304,7 @@ function renderShell() {
   let content = '';
   if (view === 'picks') content = renderPicks();
   else if (view === 'leaderboard') content = renderLeaderboard();
+  else if (view === 'brackets') content = renderAllBrackets();
   else if (view === 'rules') content = renderRules();
   else if (view === 'admin') content = renderAdmin();
   return `
@@ -338,87 +341,175 @@ function renderLogin() {
     </div>`;
 }
 
-function slotHtml(rid, sid, teams, labelA, labelB, r) {
-  const globalState = getState('r1');
+// Get the live value of a winner select — reads DOM if open, falls back to saved pick
+function getLiveWinner(rid, sid) {
+  const el = document.getElementById(`pw_${rid}_${sid}`);
+  if (el) return el.value;
+  return myPick(rid, sid).winner || '';
+}
+
+function slotHtml(rid, sid, availTeams, labelA, labelB, r, locked) {
   const pick = myPick(rid, sid);
   const res = results[rid]?.[sid];
 
-  let teamsHtml = '';
-  if (teams) {
-    teamsHtml = `<div class="slot-teams">Pick any team</div>
-      <select id="pw_${rid}_${sid}">
-        <option value="">Winner</option>
-        ${teams.map(t=>`<option value="${t}"${pick.winner===t?' selected':''}>${t}</option>`).join('')}
-      </select>
-      <select id="pg_${rid}_${sid}">
-        <option value="">Gms</option>
-        ${GAMES.map(g=>`<option value="${g}"${pick.games===g?' selected':''}>${g}</option>`).join('')}
-      </select>`;
-  } else {
-    teamsHtml = `<div class="slot-teams"><strong>${labelA}</strong> vs <strong>${labelB}</strong></div>
-      <select id="pw_${rid}_${sid}">
-        <option value="">Winner</option>
-        <option value="${labelA}"${pick.winner===labelA?' selected':''}>${labelA}</option>
-        <option value="${labelB}"${pick.winner===labelB?' selected':''}>${labelB}</option>
-      </select>
-      <select id="pg_${rid}_${sid}">
-        <option value="">Gms</option>
-        ${GAMES.map(g=>`<option value="${g}"${pick.games===g?' selected':''}>${g}</option>`).join('')}
-      </select>`;
+  if (locked) {
+    let html = '';
+    if (pick.winner) {
+      html = `<div class="locked-pick">${pick.winner}</div><div class="locked-games">in ${pick.games||'?'} games</div>`;
+    } else {
+      html = `<div class="locked-pick" style="color:var(--text2)">No pick</div>`;
+    }
+    if (res?.winner) {
+      const correct = pick.winner === res.winner;
+      const gRight = correct && pick.games === res.games;
+      const pts = (correct ? r.pts_team : 0) + (gRight ? r.pts_games : 0);
+      html += `<div class="locked-result ${correct?'correct':'wrong'}">${res.winner} in ${res.games} · ${pts>0?'+'+pts+'pt':'0pt'}</div>`;
+    }
+    return `<div class="series-slot">${html}</div>`;
   }
 
-  let lockedHtml = '';
-  if (pick.winner) {
-    lockedHtml = `<div class="locked-pick">${pick.winner}</div><div class="locked-games">in ${pick.games||'?'} games</div>`;
-  } else {
-    lockedHtml = `<div class="locked-pick" style="color:var(--text2)">No pick</div>`;
-  }
-  if (res?.winner) {
-    const correct = pick.winner === res.winner;
-    const gRight = correct && pick.games === res.games;
-    const pts = (correct ? r.pts_team : 0) + (gRight ? r.pts_games : 0);
-    lockedHtml += `<div class="locked-result ${correct?'correct':'wrong'}">${res.winner} in ${res.games} · ${pts>0?'+'+pts+'pt':'0pt'}</div>`;
+  // Open — editable
+  let label = '';
+  let opts = '';
+  if (availTeams && availTeams.length > 0) {
+    label = availTeams.length === 2
+      ? `<div class="slot-teams"><strong>${availTeams[0]}</strong> vs <strong>${availTeams[1]}</strong></div>`
+      : `<div class="slot-teams" style="color:var(--text2);font-style:italic">Pick R1 winners first</div>`;
+    opts = availTeams.length > 0
+      ? availTeams.map(t=>`<option value="${t}"${pick.winner===t?' selected':''}>${t}</option>`).join('')
+      : '';
+  } else if (labelA && labelB) {
+    label = `<div class="slot-teams"><strong>${labelA}</strong> vs <strong>${labelB}</strong></div>`;
+    opts = `<option value="${labelA}"${pick.winner===labelA?' selected':''}>${labelA}</option>
+            <option value="${labelB}"${pick.winner===labelB?' selected':''}>${labelB}</option>`;
   }
 
-  const inner = globalState === 'open' ? teamsHtml : lockedHtml;
-  return `<div class="series-slot">${inner}</div>`;
+  const disabled = (availTeams && availTeams.length === 0) ? 'disabled style="opacity:0.4"' : '';
+
+  return `<div class="series-slot" id="slot_${rid}_${sid}">
+    ${label}
+    <select id="pw_${rid}_${sid}" ${disabled} onchange="refreshBracket()">
+      <option value="">Winner</option>
+      ${opts}
+    </select>
+    <select id="pg_${rid}_${sid}" ${disabled}>
+      <option value="">Gms</option>
+      ${GAMES.map(g=>`<option value="${g}"${pick.games===g?' selected':''}>${g}</option>`).join('')}
+    </select>
+  </div>`;
+}
+
+function getCascadedTeams() {
+  // Returns the available teams for each later-round slot based on current R1/R2/R3 picks
+  const r1 = (sid) => getLiveWinner('r1', sid);
+  const r2 = (sid) => getLiveWinner('r2', sid);
+  const r3 = (sid) => getLiveWinner('r3', sid);
+
+  // East R2: s1 = winner(e1) vs winner(e2), s2 = winner(e3) vs winner(e4)
+  const er2s1 = [r1('e1'), r1('e2')].filter(Boolean);
+  const er2s2 = [r1('e3'), r1('e4')].filter(Boolean);
+  // West R2: s3 = winner(w1) vs winner(w2), s4 = winner(w3) vs winner(w4)
+  const wr2s3 = [r1('w1'), r1('w2')].filter(Boolean);
+  const wr2s4 = [r1('w3'), r1('w4')].filter(Boolean);
+
+  // East Conf Final: r3_s1 = winner(r2_s1) vs winner(r2_s2)
+  const ecf = [r2('r2_s1'), r2('r2_s2')].filter(Boolean);
+  // West Conf Final: r3_s2 = winner(r2_s3) vs winner(r2_s4)
+  const wcf = [r2('r2_s3'), r2('r2_s4')].filter(Boolean);
+
+  // Cup Final: r4_s1 = winner(r3_s1) vs winner(r3_s2)
+  const final = [r3('r3_s1'), r3('r3_s2')].filter(Boolean);
+
+  return { er2s1, er2s2, wr2s3, wr2s4, ecf, wcf, final };
+}
+
+function refreshBracket() {
+  // Called whenever a R1/R2/R3 pick changes — updates downstream slot options in DOM
+  const t = getCascadedTeams();
+
+  function updateSlot(rid, sid, teams) {
+    const sel = document.getElementById(`pw_${rid}_${sid}`);
+    if (!sel) return;
+    const cur = sel.value;
+    const disabled = teams.length === 0;
+    sel.disabled = disabled;
+    sel.style.opacity = disabled ? '0.4' : '1';
+    const gsel = document.getElementById(`pg_${rid}_${sid}`);
+    if (gsel) { gsel.disabled = disabled; gsel.style.opacity = disabled ? '0.4' : '1'; }
+
+    // Rebuild options
+    sel.innerHTML = `<option value="">Winner</option>` +
+      teams.map(t=>`<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
+
+    // If current pick no longer valid, clear it
+    if (cur && !teams.includes(cur)) sel.value = '';
+
+    // Update label
+    const slot = document.getElementById(`slot_${rid}_${sid}`);
+    if (slot) {
+      const lbl = slot.querySelector('.slot-teams');
+      if (lbl) {
+        if (teams.length === 2) lbl.innerHTML = `<strong>${teams[0]}</strong> vs <strong>${teams[1]}</strong>`;
+        else if (teams.length === 0) { lbl.style.fontStyle='italic'; lbl.style.color='var(--text2)'; lbl.textContent='Pick previous round first'; }
+        else { lbl.style.fontStyle=''; lbl.style.color='var(--text2)'; lbl.textContent = teams.join(' / ') + ' (pick 2nd team)'; }
+      }
+    }
+
+    // Cascade further
+    if (rid === 'r2') refreshBracket();
+    if (rid === 'r3') refreshBracket();
+  }
+
+  updateSlot('r2','r2_s1', t.er2s1);
+  updateSlot('r2','r2_s2', t.er2s2);
+  updateSlot('r2','r2_s3', t.wr2s3);
+  updateSlot('r2','r2_s4', t.wr2s4);
+  updateSlot('r3','r3_s1', t.ecf);
+  updateSlot('r3','r3_s2', t.wcf);
+  updateSlot('r4','r4_s1', t.final);
 }
 
 function renderPicks() {
   const globalState = getState('r1');
+  const locked = globalState !== 'open';
   const myTb = tiebreakers[currentUser.id] || '';
 
-  const banner = globalState === 'open'
-    ? `<div class="status-banner open">Bracket is open — fill out all 4 rounds then hit Save</div>`
-    : `<div class="status-banner locked">Bracket is locked — no more changes</div>`;
+  const banner = !locked
+    ? `<div class="status-banner open">Bracket open — pick Round 1 first, then each round unlocks in order</div>`
+    : `<div class="status-banner locked">Bracket locked — no more changes</div>`;
 
-  // East R1: e1,e2,e3,e4  West R1: w1,w2,w3,w4
   const e = R1_MATCHUPS.filter(m=>m.conf==='East');
   const w = R1_MATCHUPS.filter(m=>m.conf==='West');
 
-  // Helper to shorten team names for display
-  function short(name) { return name.split(' ').pop(); }
+  // For initial render, get cascaded teams from saved picks
+  const t = getCascadedTeams();
 
-  // Build each column
-  // Col 0: East R1 (4 slots)
-  const col0 = e.map(m => slotHtml('r1', m.id, null, m.a, m.b, ROUNDS[0])).join('');
-  // Col 1: East R2 (2 slots)
-  const col1 = ['r2_s1','r2_s2'].map(sid => slotHtml('r2', sid, ALL_TEAMS, '', '', ROUNDS[1])).join('');
-  // Col 2: East Conf Final (1 slot)
-  const col2 = slotHtml('r3', 'r3_s1', ALL_TEAMS, '', '', ROUNDS[2]);
-  // Col 3: Cup Final (center)
+  const col0 = w.map(m => slotHtml('r1', m.id, null, m.a, m.b, ROUNDS[0], locked)).join('');
+  const col1 = [
+    slotHtml('r2','r2_s3', locked ? null : t.wr2s3, '', '', ROUNDS[1], locked),
+    slotHtml('r2','r2_s4', locked ? null : t.wr2s4, '', '', ROUNDS[1], locked),
+  ].join('');
+  const col2 = slotHtml('r3','r3_s2', locked ? null : t.wcf, '', '', ROUNDS[2], locked);
+
+  // Cup Final
   const finalPick = myPick('r4','r4_s1');
   const finalRes = results['r4']?.['r4_s1'];
   let finalInner = '';
-  if (globalState === 'open') {
-    finalInner = `<select id="pw_r4_r4_s1" style="margin:0 0 4px 0;font-size:11px;padding:5px 6px;width:100%">
-      <option value="">Winner</option>
-      ${ALL_TEAMS.map(t=>`<option value="${t}"${finalPick.winner===t?' selected':''}>${t}</option>`).join('')}
-    </select>
-    <select id="pg_r4_r4_s1" style="margin:0;font-size:11px;padding:5px 6px;width:100%">
-      <option value="">Gms</option>
-      ${GAMES.map(g=>`<option value="${g}"${finalPick.games===g?' selected':''}>${g}</option>`).join('')}
-    </select>`;
+  if (!locked) {
+    const ft = t.final;
+    const fopts = ft.map(tm=>`<option value="${tm}"${finalPick.winner===tm?' selected':''}>${tm}</option>`).join('');
+    const fdisabled = ft.length === 0 ? 'disabled style="opacity:0.4"' : '';
+    const flabel = ft.length === 2
+      ? `<div class="slot-teams"><strong>${ft[0]}</strong> vs <strong>${ft[1]}</strong></div>`
+      : `<div class="slot-teams" style="color:var(--text2);font-style:italic">Pick conf winners first</div>`;
+    finalInner = `${flabel}
+      <select id="pw_r4_r4_s1" ${fdisabled} onchange="refreshBracket()" style="margin:4px 0;font-size:11px;padding:5px 6px;width:100%">
+        <option value="">Winner</option>${fopts}
+      </select>
+      <select id="pg_r4_r4_s1" ${fdisabled} style="margin:0;font-size:11px;padding:5px 6px;width:100%">
+        <option value="">Gms</option>
+        ${GAMES.map(g=>`<option value="${g}"${finalPick.games===g?' selected':''}>${g}</option>`).join('')}
+      </select>`;
   } else {
     finalInner = finalPick.winner
       ? `<div class="locked-pick" style="font-size:13px">${finalPick.winner}</div><div class="locked-games">in ${finalPick.games||'?'} games</div>`
@@ -426,33 +517,34 @@ function renderPicks() {
     if (finalRes?.winner) {
       const correct = finalPick.winner === finalRes.winner;
       const gRight = correct && finalPick.games === finalRes.games;
-      const pts = (correct ? 4 : 0) + (gRight ? 1 : 0);
+      const pts = (correct?4:0)+(gRight?1:0);
       finalInner += `<div class="locked-result ${correct?'correct':'wrong'}" style="font-size:11px;margin-top:4px">${finalRes.winner} · ${pts>0?'+'+pts+'pt':'0pt'}</div>`;
     }
   }
-  const col3 = `<div class="cup-center">
+
+  const col3 = `<div class="cup-center" id="slot_r4_r4_s1_wrap">
     <div class="cup-icon">🏆</div>
     <div class="cup-label">Cup Final</div>
     <div class="cup-pts">4 pts</div>
     <div class="series-slot final-slot" style="margin-top:8px;width:100%">${finalInner}</div>
   </div>`;
-  // Col 4: West Conf Final (1 slot)
-  const col4 = slotHtml('r3', 'r3_s2', ALL_TEAMS, '', '', ROUNDS[2]);
-  // Col 5: West R2 (2 slots)
-  const col5 = ['r2_s3','r2_s4'].map(sid => slotHtml('r2', sid, ALL_TEAMS, '', '', ROUNDS[1])).join('');
-  // Col 6: West R1 (4 slots)
-  const col6 = w.map(m => slotHtml('r1', m.id, null, m.a, m.b, ROUNDS[0])).join('');
+
+  const col4 = slotHtml('r3','r3_s1', locked ? null : t.ecf, '', '', ROUNDS[2], locked);
+  const col5 = [
+    slotHtml('r2','r2_s1', locked ? null : t.er2s1, '', '', ROUNDS[1], locked),
+    slotHtml('r2','r2_s2', locked ? null : t.er2s2, '', '', ROUNDS[1], locked),
+  ].join('');
+  const col6 = e.map(m => slotHtml('r1', m.id, null, m.a, m.b, ROUNDS[0], locked)).join('');
 
   const tiebreaker = `<div class="tb-box">
     <label>Tiebreaker — total goals in Cup Final</label>
     <div class="tb-desc">Closest prediction wins ties. You can go over.</div>
-    ${globalState === 'open'
+    ${!locked
       ? `<input type="number" id="tb_input" placeholder="e.g. 38" value="${myTb}" style="width:160px;margin:0" />`
-      : `<div style="font-size:15px;font-weight:600">${myTb || '—'} goals</div>`
-    }
+      : `<div style="font-size:15px;font-weight:600">${myTb || '—'} goals</div>`}
   </div>`;
 
-  const saveBtn = globalState === 'open'
+  const saveBtn = !locked
     ? `<button class="btn-gold" id="save_all_picks" style="width:100%;padding:14px;font-size:16px;margin-top:1rem">Save All Picks</button>`
     : '';
 
@@ -469,13 +561,13 @@ function renderPicks() {
         <div class="bracket-header">Round 1<span class="pts-tag">1 pt</span></div>
       </div>
       <div class="bracket-headers" style="margin-bottom:8px;margin-top:-2px">
-        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">EAST</div>
-        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">EAST</div>
-        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">EAST</div>
+        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">WEST</div>
+        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">WEST</div>
+        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">WEST</div>
         <div class="bracket-header" style="border:none"></div>
-        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">WEST</div>
-        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">WEST</div>
-        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">WEST</div>
+        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">EAST</div>
+        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">EAST</div>
+        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">EAST</div>
       </div>
       <div class="bracket-grid">
         <div class="bracket-col r1" style="gap:8px">${col0}</div>
@@ -502,6 +594,103 @@ function getMatchupsForRound(ri) {
 }
 
 
+
+
+
+function renderAllBrackets() {
+  const scores = computeScores();
+  const userIds = Object.keys(profiles).filter(uid => allPicks[uid]);
+  if (userIds.length === 0) return `<div class="card"><div style="color:var(--text2)">No picks submitted yet.</div></div>`;
+
+  // Sort by score desc
+  userIds.sort((a,b) => (scores[b]||0) - (scores[a]||0));
+
+  // All series in order
+  const SERIES = [
+    {rid:'r1',sid:'e1',label:'R1 East 1'}, {rid:'r1',sid:'e2',label:'R1 East 2'},
+    {rid:'r1',sid:'e3',label:'R1 East 3'}, {rid:'r1',sid:'e4',label:'R1 East 4'},
+    {rid:'r1',sid:'w1',label:'R1 West 1'}, {rid:'r1',sid:'w2',label:'R1 West 2'},
+    {rid:'r1',sid:'w3',label:'R1 West 3'}, {rid:'r1',sid:'w4',label:'R1 West 4'},
+    {rid:'r2',sid:'r2_s1',label:'R2 E-1'}, {rid:'r2',sid:'r2_s2',label:'R2 E-2'},
+    {rid:'r2',sid:'r2_s3',label:'R2 W-1'}, {rid:'r2',sid:'r2_s4',label:'R2 W-2'},
+    {rid:'r3',sid:'r3_s1',label:'ECF'}, {rid:'r3',sid:'r3_s2',label:'WCF'},
+    {rid:'r4',sid:'r4_s1',label:'Cup Final'},
+  ];
+
+  function pickStyle(rid, sid, winner) {
+    const res = results[rid]?.[sid];
+    if (!res?.winner) return '';
+    if (winner === res.winner) return 'color:var(--green);font-weight:600';
+    return 'color:var(--red)';
+  }
+
+  let html = `<div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);color:var(--gold2);font-weight:600;white-space:nowrap">Player</th>
+          <th style="padding:6px 4px;border-bottom:1px solid var(--border);color:var(--gold2);text-align:right;white-space:nowrap">Pts</th>`;
+
+  // Group headers
+  const groups = [
+    {label:'Round 1 — East', cols:4},
+    {label:'Round 1 — West', cols:4},
+    {label:'Round 2', cols:4},
+    {label:'Conf Finals', cols:2},
+    {label:'Cup Final', cols:1},
+  ];
+  groups.forEach(g => {
+    html += `<th colspan="${g.cols}" style="padding:6px 8px;border-bottom:1px solid var(--border);border-left:1px solid var(--border2);color:var(--text2);font-size:11px;letter-spacing:1px;text-align:center">${g.label}</th>`;
+  });
+  html += `</tr><tr><th></th><th></th>`;
+
+  // Series sub-headers with actual matchup labels
+  SERIES.forEach((s, i) => {
+    const borderLeft = [0,4,8,12,14].includes(i) ? 'border-left:1px solid var(--border2);' : '';
+    let matchLabel = s.label;
+    if (s.rid === 'r1') {
+      const m = R1_MATCHUPS.find(m => m.id === s.sid);
+      if (m) matchLabel = `${m.a.split(' ').pop()} vs ${m.b.split(' ').pop()}`;
+    }
+    html += `<th style="padding:5px 4px;border-bottom:1px solid var(--border);color:var(--text2);font-size:10px;text-align:center;${borderLeft}white-space:nowrap">${matchLabel}</th>`;
+  });
+  html += `</tr></thead><tbody>`;
+
+  userIds.forEach((uid, idx) => {
+    const name = profiles[uid]?.username || uid;
+    const pts = scores[uid] || 0;
+    const tb = tiebreakers[uid] ? ` (TB:${tiebreakers[uid]})` : '';
+    const bg = idx % 2 === 0 ? 'background:rgba(255,255,255,0.02)' : '';
+    html += `<tr style="${bg}">
+      <td style="padding:8px 10px;font-weight:500;white-space:nowrap">${name}${tb?`<span style="color:var(--text2);font-size:10px">${tb}</span>`:''}</td>
+      <td style="padding:8px 6px;text-align:right;font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--gold2)">${pts}</td>`;
+
+    SERIES.forEach((s, i) => {
+      const pick = allPicks[uid]?.[s.rid]?.[s.sid] || {};
+      const borderLeft = [0,4,8,12,14].includes(i) ? 'border-left:1px solid var(--border2);' : '';
+      const style = pickStyle(s.rid, s.sid, pick.winner);
+      const shortName = pick.winner ? pick.winner.split(' ').pop() : '—';
+      const games = pick.games ? ` (${pick.games})` : '';
+      html += `<td style="padding:6px 4px;text-align:center;${borderLeft}${style}" title="${pick.winner||''}${games}">${shortName}${games}</td>`;
+    });
+    html += `</tr>`;
+  });
+
+  // Results row
+  html += `<tr style="border-top:2px solid var(--border)">
+    <td style="padding:8px 10px;color:var(--gold2);font-weight:600;font-size:12px">RESULTS</td>
+    <td></td>`;
+  SERIES.forEach((s, i) => {
+    const res = results[s.rid]?.[s.sid];
+    const borderLeft = [0,4,8,12,14].includes(i) ? 'border-left:1px solid var(--border2);' : '';
+    const short = res?.winner ? res.winner.split(' ').pop() : '—';
+    const games = res?.games ? ` (${res.games})` : '';
+    html += `<td style="padding:6px 4px;text-align:center;${borderLeft}color:var(--gold2);font-weight:600;font-size:11px">${short}${games}</td>`;
+  });
+  html += `</tr></tbody></table></div>`;
+
+  return `<div class="card" style="padding:1rem">${html}</div>`;
+}
 
 function renderRules() {
   return `<div class="card gold-border">
@@ -655,23 +844,31 @@ function attachMain() {
     t.onclick = () => { view = t.dataset.tab; saveMsg = ''; render(); };
   });
 
+  // Wire up cascading bracket on initial load
+  if (view === 'picks' && getState('r1') === 'open') {
+    setTimeout(() => refreshBracket(), 0);
+  }
+
   // Save ALL picks at once
   const saveAllBtn = document.getElementById('save_all_picks');
   if (saveAllBtn) {
     saveAllBtn.onclick = async () => {
+      const allSeries = [
+        {rid:'r1', sid:'e1'},{rid:'r1',sid:'e2'},{rid:'r1',sid:'e3'},{rid:'r1',sid:'e4'},
+        {rid:'r1', sid:'w1'},{rid:'r1',sid:'w2'},{rid:'r1',sid:'w3'},{rid:'r1',sid:'w4'},
+        {rid:'r2', sid:'r2_s1'},{rid:'r2',sid:'r2_s2'},{rid:'r2',sid:'r2_s3'},{rid:'r2',sid:'r2_s4'},
+        {rid:'r3', sid:'r3_s1'},{rid:'r3',sid:'r3_s2'},
+        {rid:'r4', sid:'r4_s1'},
+      ];
       const upserts = [];
-      ROUNDS.forEach((r, ri) => {
-        const matchups = getMatchupsForRound(ri);
-        matchups.forEach(m => {
-          const w = document.getElementById(`pw_${r.id}_${m.id}`)?.value;
-          const g = document.getElementById(`pg_${r.id}_${m.id}`)?.value;
-          if (w) upserts.push({ user_id: currentUser.id, round_id: r.id, series_id: m.id, winner: w, games: g || null });
-        });
+      allSeries.forEach(({rid,sid}) => {
+        const w = document.getElementById(`pw_${rid}_${sid}`)?.value;
+        const g = document.getElementById(`pg_${rid}_${sid}`)?.value;
+        if (w) upserts.push({ user_id: currentUser.id, round_id: rid, series_id: sid, winner: w, games: g || null });
       });
       if (upserts.length > 0) {
         await sb.from('picks').upsert(upserts, { onConflict: 'user_id,round_id,series_id' });
       }
-      // Tiebreaker
       const tbEl = document.getElementById('tb_input');
       if (tbEl?.value) {
         await sb.from('tiebreakers').upsert({ user_id: currentUser.id, goals: parseInt(tbEl.value) }, { onConflict: 'user_id' });
