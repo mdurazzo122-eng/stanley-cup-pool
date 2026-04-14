@@ -128,7 +128,7 @@
   .badge-open { background: rgba(60,179,113,0.15); color: var(--green); border: 1px solid rgba(60,179,113,0.3); }
   .badge-locked { background: rgba(226,75,74,0.15); color: var(--red); border: 1px solid rgba(226,75,74,0.3); }
 
-  /* Mobile bracket — vertical stacked layout */
+  /* Mobile bracket — vertical stacked layout (hidden by default) */
   .mobile-bracket { display: none; }
   .mobile-round { background: var(--dark2); border: 1px solid var(--border2); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
   .mobile-round-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; cursor: pointer; user-select: none; }
@@ -149,10 +149,32 @@
   .mobile-slot .locked-result { font-size: 13px; padding-top: 6px; margin-top: 6px; }
   .mobile-conf-label { font-family: 'Bebas Neue', sans-serif; font-size: 11px; letter-spacing: 3px; color: var(--text2); margin: 10px 0 6px; }
 
+  /* Scroll hint */
+  .scroll-hint { display: none; font-size: 12px; color: var(--text2); text-align: center; margin-bottom: 6px; letter-spacing: 1px; }
+
   @media (max-width: 700px) {
-    .bracket-wrap { display: none; }
-    .mobile-bracket { display: block; }
-    .app { max-width: 100%; }
+    .app { padding: 1rem .5rem; }
+    .scroll-hint { display: block; }
+
+    /* Shrink slots further on mobile so more fits on screen */
+    .bracket-wrap {
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x proximity;
+      padding-bottom: .75rem;
+    }
+    .bracket-headers { min-width: 560px; }
+    .bracket-grid { min-width: 560px; grid-template-columns: 110px 90px 80px 80px 80px 90px 110px; }
+    .series-slot { padding: 5px 6px; }
+    .slot-teams { font-size: 9px; white-space: normal; line-height: 1.3; }
+    .series-slot select { font-size: 9px; padding: 3px 4px; }
+    .locked-pick { font-size: 10px; }
+    .locked-games { font-size: 9px; }
+    .locked-result { font-size: 9px; }
+    .cup-icon { font-size: 18px; }
+    .cup-label { font-size: 11px; }
+    .cup-pts { font-size: 9px; }
+    .bracket-header { font-size: 10px; padding: 4px 2px; }
+    .bracket-header .pts-tag { font-size: 9px; }
   }
 
   /* Leaderboard */
@@ -695,6 +717,7 @@ function renderPicks() {
 
   return `
     ${banner}
+    <div class="scroll-hint">← swipe to see full bracket →</div>
     <div class="bracket-wrap">
       <div class="bracket-headers">
         <div class="bracket-header">Round 1<span class="pts-tag">1 pt</span></div>
@@ -961,6 +984,21 @@ function renderAdmin() {
     <button class="btn-sm btn-gold" data-action="savetb">Save</button>`;
 
   html += `</div>`;
+
+  // Players list
+  const playerList = Object.entries(profiles).sort((a,b) => a[1].username?.localeCompare(b[1].username));
+  html += `<div class="card" style="margin-top:1rem">
+    <h3>Players (${playerList.length})</h3>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Set a temporary password for any player — they should change it after logging in.</div>
+    ${playerList.map(([uid, p]) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border2)" id="player_row_${uid}">
+        <div style="flex:1;font-size:14px;font-weight:500">${p.username || '—'}${p.is_admin ? ' <span style="font-size:10px;color:var(--gold);background:rgba(201,168,76,0.15);padding:2px 6px;border-radius:4px;margin-left:4px">admin</span>' : ''}</div>
+        <input id="newpw_${uid}" type="text" placeholder="New password" style="width:130px;margin:0;font-size:12px;padding:6px 8px" />
+        <button class="btn-sm" data-action="resetpw" data-uid="${uid}" data-username="${p.username}">Set</button>
+        <span id="pwmsg_${uid}" style="font-size:11px;min-width:50px"></span>
+      </div>`).join('')}
+  </div>`;
+
   return html;
 }
 
@@ -981,11 +1019,21 @@ async function handleLogin() {
     if (pass !== pass2) { loginError = "Passwords don't match."; render(); return; }
     const { data, error } = await sb.auth.signUp({ email, password: pass });
     if (error) { loginError = error.message; render(); return; }
-    // Save username to profile
     if (data.user) {
       await sb.from('profiles').upsert({ id: data.user.id, username, is_admin: false });
     }
   } else {
+    // Check for admin-set temp password first
+    const { data: profileData } = await sb.from('profiles').select('temp_password').eq('username', username).single();
+    if (profileData?.temp_password && pass === profileData.temp_password) {
+      // Temp password matched — sign in with it then force password update
+      const { data, error } = await sb.auth.signInWithPassword({ email, password: profileData.temp_password });
+      if (error) { loginError = 'Invalid username or password.'; render(); return; }
+      // Update their real Supabase auth password and clear temp
+      await sb.auth.updateUser({ password: profileData.temp_password });
+      await sb.from('profiles').update({ temp_password: null }).eq('username', username);
+      return;
+    }
     const { error } = await sb.auth.signInWithPassword({ email, password: pass });
     if (error) { loginError = 'Invalid username or password.'; render(); return; }
   }
@@ -1110,6 +1158,32 @@ function attachMain() {
     saveMsg = 'Tiebreaker result saved!';
     render();
   };
+
+  // Reset password
+  document.querySelectorAll('[data-action="resetpw"]').forEach(btn => {
+    btn.onclick = async () => {
+      const uid = btn.dataset.uid;
+      const username = btn.dataset.username;
+      const newpw = document.getElementById(`newpw_${uid}`)?.value?.trim();
+      const msgEl = document.getElementById(`pwmsg_${uid}`);
+      if (!newpw || newpw.length < 6) {
+        if (msgEl) { msgEl.textContent = 'Min 6 chars'; msgEl.style.color = 'var(--red)'; }
+        return;
+      }
+      // Use Supabase admin API via edge function isn't available on client —
+      // instead we update the email/password by signing in as the user isn't possible client-side.
+      // Best approach: store a password_reset flag and temp password in profiles table,
+      // player sees a prompt to change it on next login.
+      const { error } = await sb.from('profiles').update({ temp_password: newpw }).eq('id', uid);
+      if (error) {
+        if (msgEl) { msgEl.textContent = 'Error'; msgEl.style.color = 'var(--red)'; }
+        return;
+      }
+      if (msgEl) { msgEl.textContent = 'Saved'; msgEl.style.color = 'var(--green)'; }
+      document.getElementById(`newpw_${uid}`).value = '';
+      setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 3000);
+    };
+  });
 }
 
 function toggleMobileRound(header) {
