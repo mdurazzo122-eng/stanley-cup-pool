@@ -565,6 +565,10 @@ function renderPicks() {
         <button id="add_entry_btn" style="padding:6px 12px;font-size:13px;border:1px dashed rgba(201,168,76,0.4);border-radius:8px;background:transparent;color:var(--gold);cursor:pointer">+ Add entry</button>
       </div>
       ${entries.length === 0 ? `<div style="margin-top:10px;font-size:13px;color:var(--text2)">You don't have any entries yet. Add one to get started.</div>` : ''}
+      ${activeEntryId && entries.length > 0 ? `<div style="display:flex;gap:8px;margin-top:10px">
+        <button id="clear_picks_btn" class="btn-sm btn-danger" style="font-size:12px">Clear picks</button>
+        <button id="delete_entry_btn" class="btn-sm btn-danger" style="font-size:12px">Delete entry</button>
+      </div>` : ''}
     </div>`;
   } else {
     // Locked: show entry tabs for viewing
@@ -1139,6 +1143,35 @@ function attachMain() {
       addEntryBtn.disabled = true;
       await createEntry(name);
       render();
+    };
+  }
+
+  // Clear all picks for active entry
+  const clearPicksBtn = document.getElementById('clear_picks_btn');
+  if (clearPicksBtn) {
+    clearPicksBtn.onclick = async () => {
+      if (!activeEntryId) return;
+      if (!confirm('Clear all picks for this entry? This cannot be undone.')) return;
+      await sb.from('picks').delete().eq('entry_id', activeEntryId);
+      await sb.from('tiebreakers').delete().eq('entry_id', activeEntryId);
+      await refreshData();
+      saveMsg = 'Picks cleared.';
+      render();
+      setTimeout(() => { saveMsg = ''; render(); }, 3000);
+    };
+  }
+
+  // Delete entry entirely
+  const deleteEntryBtn = document.getElementById('delete_entry_btn');
+  if (deleteEntryBtn) {
+    deleteEntryBtn.onclick = async () => {
+      if (!activeEntryId) return;
+      const entry = myEntries().find(e => e.id === activeEntryId);
+      if (!confirm(`Delete "${entry?.name || 'this entry'}" and all its picks? This cannot be undone.`)) return;
+      await deleteEntry(activeEntryId);
+      saveMsg = 'Entry deleted.';
+      render();
+      setTimeout(() => { saveMsg = ''; render(); }, 3000);
     };
   }
 
