@@ -905,7 +905,7 @@ function renderRules() {
 
 function renderLeaderboard() {
   const scores = computeScores();
-  // Add zero-score users
+  const locked = getState('r1') !== 'open';
   Object.keys(profiles).forEach(uid => { if (scores[uid] == null) scores[uid] = 0; });
   const sorted = Object.entries(scores).sort((a,b) => b[1]-a[1]);
   if (sorted.length === 0) return `<div class="card"><div style="color:var(--text2)">No players yet.</div></div>`;
@@ -913,7 +913,7 @@ function renderLeaderboard() {
   let html = `<div class="card"><h3>Standings</h3>`;
   sorted.forEach(([uid, pts], i) => {
     const name = profiles[uid]?.username || uid;
-    const tb = tiebreakers[uid] ? `TB: ${tiebreakers[uid]} goals` : '';
+    const tb = locked && tiebreakers[uid] ? `TB: ${tiebreakers[uid]} goals` : '';
     html += `<div class="lb-row">
       <div class="lb-rank${i<3?' top':''}">${i+1}</div>
       <div class="lb-name">${name}<div class="lb-tb">${tb}</div></div>
