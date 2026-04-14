@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Stanley Cup Pool 2026</title>
+<title>Carroll's Stanley Cup Playoffs Bracket Pool</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -274,11 +274,11 @@ function myPick(rid, sid) { return allPicks[currentUser?.id]?.[rid]?.[sid] || {}
 // ── Scoring ────────────────────────────────────────────────────────
 function computeScores() {
   const scores = {};
+  const globalState = getState('r1');
   Object.entries(allPicks).forEach(([uid, userPicks]) => {
     let total = 0;
     ROUNDS.forEach(r => {
-      const state = getState(r.id);
-      if (state === 'open') return;
+      if (globalState === 'open') return;
       const rPicks = userPicks[r.id] || {};
       const rResults = results[r.id] || {};
       Object.entries(rPicks).forEach(([sid, pick]) => {
@@ -308,6 +308,7 @@ function renderShell() {
   const tabs = [
     { id: 'picks', label: 'My Bracket' },
     { id: 'leaderboard', label: 'Leaderboard' },
+    { id: 'rules', label: 'Rules' },
   ];
   if (isAdmin) tabs.push({ id: 'admin', label: 'Admin' });
   const tabHtml = tabs.map(t =>
@@ -316,11 +317,12 @@ function renderShell() {
   let content = '';
   if (view === 'picks') content = renderPicks();
   else if (view === 'leaderboard') content = renderLeaderboard();
+  else if (view === 'rules') content = renderRules();
   else if (view === 'admin') content = renderAdmin();
   return `
     <div class="header">
-      <h1>Stanley Cup Pool</h1>
-      <div class="sub">2026 Playoffs</div>
+      <h1>Carroll's Bracket Pool</h1>
+      <div class="sub">2026 Stanley Cup Playoffs</div>
       <div class="user-row">
         <span style="font-size:13px;color:var(--text2)">${username}</span>
         <button class="btn-sm" id="logout_btn">Sign out</button>
@@ -333,7 +335,7 @@ function renderShell() {
 
 function renderLogin() {
   return `
-    <div class="header"><h1>Stanley Cup Pool</h1><div class="sub">2026 Playoffs</div></div>
+    <div class="header"><h1>Carroll's Bracket Pool</h1><div class="sub">2026 Stanley Cup Playoffs</div></div>
     <div class="login-wrap">
       <h2>${regMode ? 'Create Account' : 'Sign In'}</h2>
       ${loginError ? `<div class="msg-error">${loginError}</div>` : ''}
@@ -352,25 +354,22 @@ function renderLogin() {
 }
 
 function renderPicks() {
-  const isLocked = ROUNDS.every(r => getState(r.id) !== 'open');
+  // All rounds share the same open/locked state — driven by r1_state
+  const globalState = getState('r1');
   let html = '';
 
-  // Instruction banner
-  const r1State = getState('r1');
-  if (r1State === 'open') {
+  if (globalState === 'open') {
     html += `<div class="card gold-border" style="margin-bottom:1rem">
-      <div style="font-size:13px;color:var(--gold2);font-weight:600;margin-bottom:4px">Set your full bracket now</div>
-      <div style="font-size:13px;color:var(--text2)">Pick the winner and series length for all 4 rounds before Round 1 locks. You're predicting who you think will advance — picks can't be changed once a round locks.</div>
+      <div style="font-size:13px;color:var(--gold2);font-weight:600;margin-bottom:4px">Set your full bracket before Round 1 locks</div>
+      <div style="font-size:13px;color:var(--text2)">Pick the winner and series length for all 4 rounds right now. For Rounds 2–4 pick whoever you think will advance. All picks lock at once before Round 1 starts — you cannot change them after that.</div>
     </div>`;
   }
 
   ROUNDS.forEach((r, ri) => {
-    const state = getState(r.id);
+    const state = globalState;
     const badgeHtml = state === 'open'
       ? '<span class="badge badge-open">Open</span>'
-      : state === 'locked'
-      ? '<span class="badge badge-locked">Locked</span>'
-      : '<span class="badge badge-pending">Pending</span>';
+      : '<span class="badge badge-locked">Locked</span>';
 
     html += `<div class="card section-gap">
       <div class="round-label">
@@ -386,7 +385,7 @@ function renderPicks() {
 
     if (matchups.length === 0) {
       html += `<div style="color:var(--text2);font-size:13px">Previous round results needed before picks open.</div>`;
-    } else if (state === 'open') {
+    } else if (globalState === 'open') {
       // Editable picks
       html += matchups.map(m => {
         const pick = myPick(r.id, m.id);
@@ -416,11 +415,10 @@ function renderPicks() {
         const myTb = tiebreakers[currentUser.id] || '';
         html += `<div class="tb-box">
           <label>Tiebreaker</label>
-          <div class="tb-desc">Predict total goals scored in the Cup Final. Closest wins (no Price is Right rules — you can go over).</div>
+          <div class="tb-desc">Predict total goals scored in the Cup Final. Closest wins — you can go over.</div>
           <input type="number" id="tb_input" placeholder="e.g. 38" value="${myTb}" style="width:160px;margin:0" />
         </div>`;
       }
-      html += `<button class="btn-gold" id="save_${r.id}" data-round="${r.id}" style="margin-top:1rem">Save ${r.name} picks</button>`;
     } else {
       // Locked — show picks with scoring if results exist
       html += matchups.map(m => {
@@ -453,6 +451,10 @@ function renderPicks() {
     html += `</div>`;
   });
 
+  if (globalState === 'open') {
+    html += `<button class="btn-gold" id="save_all_picks" style="width:100%;padding:14px;font-size:16px;margin-bottom:1rem">Save All Picks</button>`;
+  }
+
   return html;
 }
 
@@ -471,7 +473,47 @@ function getMatchupsForRound(ri) {
   return series;
 }
 
-function renderLeaderboard() {
+function renderRules() {
+  return `<div class="card gold-border">
+    <div class="round-title" style="margin-bottom:1rem">How it works</div>
+    <div style="font-size:14px;color:var(--text2);line-height:1.8">
+      <p style="margin-bottom:1rem">Before Round 1 starts, every player sets their <strong style="color:var(--text)">full bracket</strong> — picking a winner and series length for all 4 rounds. Once Round 1 locks, no more changes.</p>
+
+      <div style="margin-bottom:1.25rem">
+        <div style="color:var(--gold2);font-weight:600;margin-bottom:.5rem">Scoring</div>
+        <div style="display:grid;gap:6px">
+          <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--dark3);border-radius:8px">
+            <span>Round 1 — correct team</span><span style="color:var(--gold2);font-weight:600">1 pt</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--dark3);border-radius:8px">
+            <span>Round 2 — correct team</span><span style="color:var(--gold2);font-weight:600">2 pts</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--dark3);border-radius:8px">
+            <span>Conference Finals — correct team</span><span style="color:var(--gold2);font-weight:600">3 pts</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--dark3);border-radius:8px">
+            <span>Stanley Cup Final — correct team</span><span style="color:var(--gold2);font-weight:600">4 pts</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--dark3);border-radius:8px;border:1px solid var(--border)">
+            <span>Correct series length <em style="font-size:12px">(any round, only if you picked right team)</em></span><span style="color:var(--gold2);font-weight:600">+1 pt</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:1.25rem">
+        <div style="color:var(--gold2);font-weight:600;margin-bottom:.5rem">Prize</div>
+        <p>Top 2 finishers split the prize pool. Buy-in TBD.</p>
+      </div>
+
+      <div>
+        <div style="color:var(--gold2);font-weight:600;margin-bottom:.5rem">Tiebreaker</div>
+        <p>If two players are tied at the end, whoever predicted the closest total number of goals scored in the Stanley Cup Final wins. You can go over — closest wins.</p>
+      </div>
+    </div>
+  </div>`;
+}
+
+
   const scores = computeScores();
   // Add zero-score users
   Object.keys(profiles).forEach(uid => { if (scores[uid] == null) scores[uid] = 0; });
@@ -493,24 +535,21 @@ function renderLeaderboard() {
 }
 
 function renderAdmin() {
+  const globalState = getState('r1');
   let html = `<div class="card gold-border">
-    <h3 style="color:var(--gold2)">Round Control</h3>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:1rem">Open a round to allow picks. Lock it to freeze picks before play starts.</div>`;
-
-  ROUNDS.forEach(r => {
-    const state = getState(r.id);
-    html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border2)">
+    <h3 style="color:var(--gold2)">Bracket Control</h3>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:1rem">All 4 rounds open and lock together. Open before you send the link out. Lock before Round 1 puck drop.</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0">
       <div>
-        <div style="font-weight:500">${r.name}</div>
-        <div style="font-size:12px;color:var(--text2)">Currently: ${state}</div>
+        <div style="font-weight:500">All picks</div>
+        <div style="font-size:12px;color:var(--text2)">Currently: ${globalState === 'open' ? 'Open — players can submit picks' : 'Locked — no more changes'}</div>
       </div>
       <div class="state-buttons">
-        <button class="btn-sm btn-success" data-action="setstate" data-round="${r.id}" data-state="open">Open</button>
-        <button class="btn-sm btn-danger" data-action="setstate" data-round="${r.id}" data-state="locked">Lock</button>
+        <button class="btn-sm btn-success" data-action="setallstate" data-state="open">Open</button>
+        <button class="btn-sm btn-danger" data-action="setallstate" data-state="locked">Lock All</button>
       </div>
-    </div>`;
-  });
-  html += `</div>`;
+    </div>
+  </div>`;
 
   // Results entry
   html += `<div class="card" style="margin-top:1rem"><h3>Enter Results</h3>`;
@@ -586,41 +625,39 @@ function attachMain() {
     t.onclick = () => { view = t.dataset.tab; saveMsg = ''; render(); };
   });
 
-  // Save picks buttons
-  ROUNDS.forEach((r, ri) => {
-    const btn = document.getElementById(`save_${r.id}`);
-    if (!btn) return;
-    btn.onclick = async () => {
-      const matchups = getMatchupsForRound(ri);
+  // Save ALL picks at once
+  const saveAllBtn = document.getElementById('save_all_picks');
+  if (saveAllBtn) {
+    saveAllBtn.onclick = async () => {
       const upserts = [];
-      matchups.forEach(m => {
-        const w = document.getElementById(`pw_${r.id}_${m.id}`)?.value;
-        const g = document.getElementById(`pg_${r.id}_${m.id}`)?.value;
-        if (w) upserts.push({ user_id: currentUser.id, round_id: r.id, series_id: m.id, winner: w, games: g || null });
+      ROUNDS.forEach((r, ri) => {
+        const matchups = getMatchupsForRound(ri);
+        matchups.forEach(m => {
+          const w = document.getElementById(`pw_${r.id}_${m.id}`)?.value;
+          const g = document.getElementById(`pg_${r.id}_${m.id}`)?.value;
+          if (w) upserts.push({ user_id: currentUser.id, round_id: r.id, series_id: m.id, winner: w, games: g || null });
+        });
       });
       if (upserts.length > 0) {
         await sb.from('picks').upsert(upserts, { onConflict: 'user_id,round_id,series_id' });
       }
       // Tiebreaker
-      if (ri === 3) {
-        const tbEl = document.getElementById('tb_input');
-        if (tbEl?.value) {
-          await sb.from('tiebreakers').upsert({ user_id: currentUser.id, goals: parseInt(tbEl.value) }, { onConflict: 'user_id' });
-        }
+      const tbEl = document.getElementById('tb_input');
+      if (tbEl?.value) {
+        await sb.from('tiebreakers').upsert({ user_id: currentUser.id, goals: parseInt(tbEl.value) }, { onConflict: 'user_id' });
       }
       await refreshData();
-      saveMsg = `${r.name} picks saved!`;
+      saveMsg = 'All picks saved!';
       render();
       setTimeout(() => { saveMsg = ''; render(); }, 3000);
     };
-  });
+  }
 
-  // Admin actions
-  document.querySelectorAll('[data-action="setstate"]').forEach(btn => {
+  // Admin — lock/open all rounds at once
+  document.querySelectorAll('[data-action="setallstate"]').forEach(btn => {
     btn.onclick = async () => {
-      const update = {};
-      update[btn.dataset.round + '_state'] = btn.dataset.state;
-      await sb.from('pool_settings').update(update).eq('id', 1);
+      const s = btn.dataset.state;
+      await sb.from('pool_settings').update({ r1_state: s, r2_state: s, r3_state: s, r4_state: s }).eq('id', 1);
       await refreshData();
       render();
     };
