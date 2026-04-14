@@ -294,9 +294,9 @@ function renderShell() {
   const tabs = [
     { id: 'picks', label: 'My Bracket' },
     { id: 'leaderboard', label: 'Leaderboard' },
+    { id: 'brackets', label: 'All Brackets' },
+    { id: 'rules', label: 'Rules' },
   ];
-  if (locked) tabs.push({ id: 'brackets', label: 'All Brackets' });
-  tabs.push({ id: 'rules', label: 'Rules' });
   if (isAdmin) tabs.push({ id: 'admin', label: 'Admin' });
   const tabHtml = tabs.map(t =>
     `<button class="tab${view===t.id?' active':''}" data-tab="${t.id}">${t.label}</button>`
@@ -598,6 +598,13 @@ function getMatchupsForRound(ri) {
 
 
 function renderAllBrackets() {
+  if (getState('r1') === 'open') {
+    return `<div class="card gold-border" style="text-align:center;padding:2.5rem 1.5rem">
+      <div style="font-size:32px;margin-bottom:.75rem">🔒</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--gold);margin-bottom:.5rem">Picks Not Locked Yet</div>
+      <div style="font-size:14px;color:var(--text2)">Everyone's bracket will appear here once Round 1 locks. No peeking before then.</div>
+    </div>`;
+  }
   const scores = computeScores();
   const userIds = Object.keys(profiles).filter(uid => allPicks[uid]);
   if (userIds.length === 0) return `<div class="card"><div style="color:var(--text2)">No picks submitted yet.</div></div>`;
