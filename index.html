@@ -513,7 +513,7 @@ function renderRules() {
   </div>`;
 }
 
-
+function renderLeaderboard() {
   const scores = computeScores();
   // Add zero-score users
   Object.keys(profiles).forEach(uid => { if (scores[uid] == null) scores[uid] = 0; });
