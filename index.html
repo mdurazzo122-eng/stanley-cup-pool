@@ -96,10 +96,10 @@
 
   /* Bracket */
   .bracket-wrap { width: 100%; overflow-x: auto; padding-bottom: 1rem; }
-  .bracket-headers { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr; min-width: 700px; margin-bottom: 6px; }
+  .bracket-headers { display: grid; grid-template-columns: 160px 130px 120px 110px 120px 130px 160px; min-width: 930px; margin-bottom: 6px; }
   .bracket-header { text-align: center; font-family: 'Bebas Neue', sans-serif; font-size: 12px; letter-spacing: 1px; color: var(--gold2); padding: 5px 4px; border-bottom: 1px solid var(--border); }
   .bracket-header .pts-tag { display: block; font-family: 'Inter', sans-serif; font-size: 10px; color: var(--text2); letter-spacing: 0; }
-  .bracket-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr; gap: 0; min-width: 700px; align-items: center; }
+  .bracket-grid { display: grid; grid-template-columns: 160px 130px 120px 110px 120px 130px 160px; gap: 0; min-width: 930px; align-items: center; }
   .bracket-col { display: flex; flex-direction: column; padding: 0 3px; }
   .bracket-col.r1 { gap: 8px; }
   .bracket-col.r2 { gap: 0; justify-content: space-around; height: 100%; }
@@ -155,15 +155,9 @@
   @media (max-width: 700px) {
     .app { padding: 1rem .5rem; }
     .scroll-hint { display: block; }
-
-    /* Shrink slots further on mobile so more fits on screen */
-    .bracket-wrap {
-      -webkit-overflow-scrolling: touch;
-      scroll-snap-type: x proximity;
-      padding-bottom: .75rem;
-    }
-    .bracket-headers { min-width: 560px; }
-    .bracket-grid { min-width: 560px; grid-template-columns: 110px 90px 80px 80px 80px 90px 110px; }
+    .bracket-wrap { -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; padding-bottom: .75rem; }
+    .bracket-headers { min-width: 700px; grid-template-columns: 120px 100px 90px 80px 90px 100px 120px; }
+    .bracket-grid { min-width: 700px; grid-template-columns: 120px 100px 90px 80px 90px 100px 120px; }
     .series-slot { padding: 5px 6px; }
     .slot-teams { font-size: 9px; white-space: normal; line-height: 1.3; }
     .series-slot select { font-size: 9px; padding: 3px 4px; }
@@ -453,31 +447,31 @@ function slotHtml(rid, sid, availTeams, labelA, labelB, r, locked) {
 }
 
 function getCascadedTeams() {
-  // Returns the available teams for each later-round slot based on current R1/R2/R3 picks
+  // Each R2 slot needs the two R1 winners from its pair.
+  // A team is available as soon as its R1 pick is made — you don't need to finish all of R1.
   const r1 = (sid) => getLiveWinner('r1', sid);
   const r2 = (sid) => getLiveWinner('r2', sid);
   const r3 = (sid) => getLiveWinner('r3', sid);
 
-  // East R2: s1 = winner(e1) vs winner(e2), s2 = winner(e3) vs winner(e4)
-  const er2s1 = [r1('e1'), r1('e2')].filter(Boolean);
-  const er2s2 = [r1('e3'), r1('e4')].filter(Boolean);
-  // West R2: s3 = winner(w1) vs winner(w2), s4 = winner(w3) vs winner(w4)
-  const wr2s3 = [r1('w1'), r1('w2')].filter(Boolean);
-  const wr2s4 = [r1('w3'), r1('w4')].filter(Boolean);
+  // West R2: s1 = winner(w1) vs winner(w2), s2 = winner(w3) vs winner(w4)
+  const wr2s1 = [r1('w1'), r1('w2')].filter(Boolean);
+  const wr2s2 = [r1('w3'), r1('w4')].filter(Boolean);
+  // East R2: s3 = winner(e1) vs winner(e2), s4 = winner(e3) vs winner(e4)
+  const er2s3 = [r1('e1'), r1('e2')].filter(Boolean);
+  const er2s4 = [r1('e3'), r1('e4')].filter(Boolean);
 
-  // East Conf Final: r3_s1 = winner(r2_s1) vs winner(r2_s2)
-  const ecf = [r2('r2_s1'), r2('r2_s2')].filter(Boolean);
-  // West Conf Final: r3_s2 = winner(r2_s3) vs winner(r2_s4)
-  const wcf = [r2('r2_s3'), r2('r2_s4')].filter(Boolean);
+  // West Conf Final: winner(r2_s1) vs winner(r2_s2)
+  const wcf = [r2('r2_s1'), r2('r2_s2')].filter(Boolean);
+  // East Conf Final: winner(r2_s3) vs winner(r2_s4)
+  const ecf = [r2('r2_s3'), r2('r2_s4')].filter(Boolean);
 
-  // Cup Final: r4_s1 = winner(r3_s1) vs winner(r3_s2)
+  // Cup Final: winner(r3_s1=WCF) vs winner(r3_s2=ECF)
   const final = [r3('r3_s1'), r3('r3_s2')].filter(Boolean);
 
-  return { er2s1, er2s2, wr2s3, wr2s4, ecf, wcf, final };
+  return { wr2s1, wr2s2, er2s3, er2s4, wcf, ecf, final };
 }
 
 function refreshBracket() {
-  // Called whenever a R1/R2/R3 pick changes — updates downstream slot options in DOM
   const t = getCascadedTeams();
 
   function updateSlot(rid, sid, teams) {
@@ -490,36 +484,32 @@ function refreshBracket() {
     const gsel = document.getElementById(`pg_${rid}_${sid}`);
     if (gsel) { gsel.disabled = disabled; gsel.style.opacity = disabled ? '0.4' : '1'; }
 
-    // Rebuild options
     sel.innerHTML = `<option value="">Winner</option>` +
-      teams.map(t=>`<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
+      teams.map(tm=>`<option value="${tm}"${tm===cur?' selected':''}>${tm}</option>`).join('');
 
-    // If current pick no longer valid, clear it
     if (cur && !teams.includes(cur)) sel.value = '';
 
-    // Update label
     const slot = document.getElementById(`slot_${rid}_${sid}`);
     if (slot) {
       const lbl = slot.querySelector('.slot-teams');
       if (lbl) {
-        if (teams.length === 2) lbl.innerHTML = `<strong>${teams[0]}</strong> vs <strong>${teams[1]}</strong>`;
-        else if (teams.length === 0) { lbl.style.fontStyle='italic'; lbl.style.color='var(--text2)'; lbl.textContent='Pick previous round first'; }
-        else { lbl.style.fontStyle=''; lbl.style.color='var(--text2)'; lbl.textContent = teams.join(' / ') + ' (pick 2nd team)'; }
+        if (teams.length === 2) { lbl.style.fontStyle=''; lbl.style.color=''; lbl.innerHTML=`<strong>${teams[0]}</strong> vs <strong>${teams[1]}</strong>`; }
+        else if (teams.length === 1) { lbl.style.fontStyle='italic'; lbl.style.color='var(--text2)'; lbl.textContent=`${teams[0]} vs (pick other team)`; }
+        else { lbl.style.fontStyle='italic'; lbl.style.color='var(--text2)'; lbl.textContent='Pick previous round first'; }
       }
     }
-
-    // Cascade further
-    if (rid === 'r2') refreshBracket();
-    if (rid === 'r3') refreshBracket();
   }
 
-  updateSlot('r2','r2_s1', t.er2s1);
-  updateSlot('r2','r2_s2', t.er2s2);
-  updateSlot('r2','r2_s3', t.wr2s3);
-  updateSlot('r2','r2_s4', t.wr2s4);
-  updateSlot('r3','r3_s1', t.ecf);
-  updateSlot('r3','r3_s2', t.wcf);
+  updateSlot('r2','r2_s1', t.wr2s1);
+  updateSlot('r2','r2_s2', t.wr2s2);
+  updateSlot('r2','r2_s3', t.er2s3);
+  updateSlot('r2','r2_s4', t.er2s4);
+  updateSlot('r3','r3_s1', t.wcf);
+  updateSlot('r3','r3_s2', t.ecf);
   updateSlot('r4','r4_s1', t.final);
+
+  // Cascade to mobile too if present
+  refreshMobileCascade();
 }
 
 function renderPicks() {
@@ -528,21 +518,21 @@ function renderPicks() {
   const myTb = tiebreakers[currentUser.id] || '';
 
   const banner = !locked
-    ? `<div class="status-banner open">Bracket open — pick Round 1 first, then each round unlocks in order</div>`
+    ? `<div class="status-banner open">Pick any matchup to unlock the next round — picks cascade as you go. Nothing saves until you hit Save.</div>`
     : `<div class="status-banner locked">Bracket locked — no more changes</div>`;
 
   const e = R1_MATCHUPS.filter(m=>m.conf==='East');
   const w = R1_MATCHUPS.filter(m=>m.conf==='West');
 
-  // For initial render, get cascaded teams from saved picks
   const t = getCascadedTeams();
 
+  // West side: col0=W-R1, col1=W-R2, col2=WCF
   const col0 = w.map(m => slotHtml('r1', m.id, null, m.a, m.b, ROUNDS[0], locked)).join('');
   const col1 = [
-    slotHtml('r2','r2_s3', locked ? null : t.wr2s3, '', '', ROUNDS[1], locked),
-    slotHtml('r2','r2_s4', locked ? null : t.wr2s4, '', '', ROUNDS[1], locked),
+    slotHtml('r2','r2_s1', locked ? null : t.wr2s1, '', '', ROUNDS[1], locked),
+    slotHtml('r2','r2_s2', locked ? null : t.wr2s2, '', '', ROUNDS[1], locked),
   ].join('');
-  const col2 = slotHtml('r3','r3_s2', locked ? null : t.wcf, '', '', ROUNDS[2], locked);
+  const col2 = slotHtml('r3','r3_s1', locked ? null : t.wcf, '', '', ROUNDS[2], locked);
 
   // Cup Final
   const finalPick = myPick('r4','r4_s1');
@@ -582,10 +572,11 @@ function renderPicks() {
     <div class="series-slot final-slot" style="margin-top:8px;width:100%">${finalInner}</div>
   </div>`;
 
-  const col4 = slotHtml('r3','r3_s1', locked ? null : t.ecf, '', '', ROUNDS[2], locked);
+  // East side: col4=ECF, col5=E-R2, col6=E-R1
+  const col4 = slotHtml('r3','r3_s2', locked ? null : t.ecf, '', '', ROUNDS[2], locked);
   const col5 = [
-    slotHtml('r2','r2_s1', locked ? null : t.er2s1, '', '', ROUNDS[1], locked),
-    slotHtml('r2','r2_s2', locked ? null : t.er2s2, '', '', ROUNDS[1], locked),
+    slotHtml('r2','r2_s3', locked ? null : t.er2s3, '', '', ROUNDS[1], locked),
+    slotHtml('r2','r2_s4', locked ? null : t.er2s4, '', '', ROUNDS[1], locked),
   ].join('');
   const col6 = e.map(m => slotHtml('r1', m.id, null, m.a, m.b, ROUNDS[0], locked)).join('');
 
@@ -679,11 +670,11 @@ function renderPicks() {
       </div>
       <div class="mobile-round-body">
         <div class="mobile-conf-label">West</div>
-        ${mobileSlot('r2','r2_s1',null,null,locked?null:t.wr2s3,ROUNDS[1],'West Series 1')}
-        ${mobileSlot('r2','r2_s2',null,null,locked?null:t.wr2s4,ROUNDS[1],'West Series 2')}
+        ${mobileSlot('r2','r2_s1',null,null,locked?null:t.wr2s1,ROUNDS[1],'West Series 1')}
+        ${mobileSlot('r2','r2_s2',null,null,locked?null:t.wr2s2,ROUNDS[1],'West Series 2')}
         <div class="mobile-conf-label">East</div>
-        ${mobileSlot('r2','r2_s3',null,null,locked?null:t.er2s1,ROUNDS[1],'East Series 1')}
-        ${mobileSlot('r2','r2_s4',null,null,locked?null:t.er2s2,ROUNDS[1],'East Series 2')}
+        ${mobileSlot('r2','r2_s3',null,null,locked?null:t.er2s3,ROUNDS[1],'East Series 1')}
+        ${mobileSlot('r2','r2_s4',null,null,locked?null:t.er2s4,ROUNDS[1],'East Series 2')}
       </div>
     </div>
     <!-- Conf Finals -->
@@ -694,9 +685,9 @@ function renderPicks() {
       </div>
       <div class="mobile-round-body">
         <div class="mobile-conf-label">West</div>
-        ${mobileSlot('r3','r3_s2',null,null,locked?null:t.wcf,ROUNDS[2],'WCF')}
+        ${mobileSlot('r3','r3_s1',null,null,locked?null:t.wcf,ROUNDS[2],'WCF')}
         <div class="mobile-conf-label">East</div>
-        ${mobileSlot('r3','r3_s1',null,null,locked?null:t.ecf,ROUNDS[2],'ECF')}
+        ${mobileSlot('r3','r3_s2',null,null,locked?null:t.ecf,ROUNDS[2],'ECF')}
       </div>
     </div>
     <!-- Cup Final -->
@@ -1219,11 +1210,10 @@ function syncMobilePick(rid, sid) {
 
 function refreshMobileCascade() {
   const t = getCascadedTeams();
-  // Map: [rid, sid, teams]
   const updates = [
-    ['r2','r2_s1', t.wr2s3], ['r2','r2_s2', t.wr2s4],
-    ['r2','r2_s3', t.er2s1], ['r2','r2_s4', t.er2s2],
-    ['r3','r3_s2', t.wcf],   ['r3','r3_s1', t.ecf],
+    ['r2','r2_s1', t.wr2s1], ['r2','r2_s2', t.wr2s2],
+    ['r2','r2_s3', t.er2s3], ['r2','r2_s4', t.er2s4],
+    ['r3','r3_s1', t.wcf],   ['r3','r3_s2', t.ecf],
     ['r4','r4_s1', t.final],
   ];
   updates.forEach(([rid, sid, teams]) => {
@@ -1236,14 +1226,14 @@ function refreshMobileCascade() {
     const gsel = document.getElementById(`mpg_${rid}_${sid}`);
     if (gsel) { gsel.disabled = disabled; gsel.style.opacity = disabled ? '0.45' : '1'; }
     sel.innerHTML = `<option value="">Pick winner</option>` +
-      teams.map(t=>`<option value="${t}"${t===cur?' selected':''}>${t}</option>`).join('');
+      teams.map(tm=>`<option value="${tm}"${tm===cur?' selected':''}>${tm}</option>`).join('');
     if (cur && !teams.includes(cur)) sel.value = '';
-    // Update label
     const slot = document.getElementById(`mslot_${rid}_${sid}`);
     if (slot) {
       const lbl = slot.querySelector('.mobile-slot-teams');
       if (lbl) {
-        if (teams.length === 2) { lbl.style.fontStyle=''; lbl.style.color=''; lbl.textContent = `${teams[0]} vs ${teams[1]}`; }
+        if (teams.length === 2) { lbl.style.fontStyle=''; lbl.style.color=''; lbl.textContent=`${teams[0]} vs ${teams[1]}`; }
+        else if (teams.length === 1) { lbl.style.fontStyle='italic'; lbl.style.color='var(--text2)'; lbl.textContent=`${teams[0]} vs (pick other team)`; }
         else { lbl.style.fontStyle='italic'; lbl.style.color='var(--text2)'; lbl.textContent='Pick previous round first'; }
       }
     }
