@@ -33,7 +33,7 @@
     background-image: radial-gradient(ellipse at 20% 50%, rgba(201,168,76,0.04) 0%, transparent 60%),
                       radial-gradient(ellipse at 80% 20%, rgba(30,60,100,0.15) 0%, transparent 50%);
   }
-  .app { max-width: 680px; margin: 0 auto; padding: 1.5rem 1rem; }
+  .app { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem; }
 
   /* Header */
   .header { text-align: center; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
@@ -94,48 +94,42 @@
   .tab { flex: 1; text-align: center; padding: 8px; border-radius: 8px; font-size: 13px; cursor: pointer; color: var(--text2); border: none; background: transparent; transition: all 0.15s; font-weight: 500; }
   .tab.active { background: var(--dark3); color: var(--gold); border: 1px solid var(--border); }
 
-  /* Round section */
-  .round-label {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 1rem;
-  }
-  .round-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px; color: var(--gold2); }
-  .round-pts { font-size: 12px; color: var(--text2); }
+  /* Bracket */
+  .bracket-wrap { width: 100%; overflow-x: auto; padding-bottom: 1rem; }
+  .bracket-headers { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr; min-width: 700px; margin-bottom: 6px; }
+  .bracket-header { text-align: center; font-family: 'Bebas Neue', sans-serif; font-size: 12px; letter-spacing: 1px; color: var(--gold2); padding: 5px 4px; border-bottom: 1px solid var(--border); }
+  .bracket-header .pts-tag { display: block; font-family: 'Inter', sans-serif; font-size: 10px; color: var(--text2); letter-spacing: 0; }
+  .bracket-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr; gap: 0; min-width: 700px; align-items: center; }
+  .bracket-col { display: flex; flex-direction: column; padding: 0 3px; }
+  .bracket-col.r1 { gap: 8px; }
+  .bracket-col.r2 { gap: 0; justify-content: space-around; height: 100%; }
+  .bracket-col.r3 { justify-content: space-around; height: 100%; }
+  .series-slot { background: var(--dark2); border: 1px solid var(--border2); border-radius: 7px; padding: 7px 8px; transition: border-color 0.15s; }
+  .series-slot:hover { border-color: rgba(201,168,76,0.3); }
+  .series-slot.final-slot { border-color: var(--border); background: rgba(201,168,76,0.06); padding: 10px; }
+  .slot-teams { font-size: 10px; color: var(--text2); margin-bottom: 5px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .slot-teams strong { color: var(--text); font-weight: 500; }
+  .series-slot select { margin: 0 0 4px 0; font-size: 10px; padding: 4px 5px; width: 100%; }
+  .series-slot select:last-of-type { margin-bottom: 0; }
+  .locked-pick { font-size: 11px; font-weight: 600; color: var(--text); }
+  .locked-games { font-size: 10px; color: var(--text2); }
+  .locked-result { font-size: 10px; margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--border2); }
+  .locked-result.correct { color: var(--green); }
+  .locked-result.wrong { color: var(--red); }
+  .cup-center { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 4px; }
+  .cup-icon { font-size: 24px; margin-bottom: 4px; }
+  .cup-label { font-family: 'Bebas Neue', sans-serif; font-size: 13px; letter-spacing: 2px; color: var(--gold); }
+  .cup-pts { font-size: 10px; color: var(--text2); margin-top: 2px; }
+  .conf-tag { font-family: 'Bebas Neue', sans-serif; font-size: 10px; letter-spacing: 2px; color: var(--text2); text-align: center; margin-bottom: 4px; }
+  .status-banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px; margin-bottom: 1rem; font-size: 13px; }
+  .status-banner.open { background: rgba(60,179,113,0.1); border: 1px solid rgba(60,179,113,0.25); color: var(--green); }
+  .status-banner.locked { background: rgba(226,75,74,0.1); border: 1px solid rgba(226,75,74,0.25); color: var(--red); }
   .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
   .badge-open { background: rgba(60,179,113,0.15); color: var(--green); border: 1px solid rgba(60,179,113,0.3); }
   .badge-locked { background: rgba(226,75,74,0.15); color: var(--red); border: 1px solid rgba(226,75,74,0.3); }
-  .badge-pending { background: rgba(138,154,176,0.15); color: var(--text2); border: 1px solid rgba(138,154,176,0.2); }
-
-  /* Matchup row */
-  .matchup {
-    display: grid;
-    grid-template-columns: 1fr 80px 80px;
-    gap: 8px;
-    align-items: center;
-    padding: 10px 12px;
-    background: var(--dark3);
-    border-radius: 8px;
-    margin-bottom: 8px;
-    border: 1px solid var(--border2);
-  }
-  .matchup-teams { font-size: 13px; color: var(--text); }
-  .matchup-teams .away { color: var(--text2); font-size: 12px; margin-top: 2px; }
-  .matchup select { margin: 0; font-size: 12px; padding: 7px 8px; }
-
-  /* Locked pick display */
-  .pick-display { font-size: 13px; }
-  .pick-winner { font-weight: 600; }
-  .pick-games { color: var(--text2); font-size: 12px; }
-  .pick-correct { color: var(--green); }
-  .pick-wrong { color: var(--red); }
-  .pick-pts { font-weight: 700; font-size: 13px; }
 
   /* Leaderboard */
-  .lb-row {
-    display: flex; align-items: center; gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--border2);
-  }
+  .lb-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border2); }
   .lb-row:last-child { border-bottom: none; }
   .lb-rank { font-family: 'Bebas Neue', sans-serif; font-size: 24px; min-width: 36px; color: var(--text2); }
   .lb-rank.top { color: var(--gold); }
@@ -146,30 +140,21 @@
   /* Error/success */
   .msg-error { color: var(--red); font-size: 13px; margin-bottom: 8px; }
   .msg-success { color: var(--green); font-size: 13px; margin-bottom: 8px; }
-
-  /* Divider */
   .divider { border: none; border-top: 1px solid var(--border2); margin: 1rem 0; }
-
-  /* Login */
   .login-wrap { max-width: 360px; margin: 3rem auto; }
   .login-wrap h2 { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 2px; color: var(--gold); margin-bottom: 1.5rem; }
-
-  /* Tiebreaker */
-  .tb-box { background: var(--dark3); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-top: .75rem; }
+  .tb-box { background: var(--dark3); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-top: 1rem; }
   .tb-box label { font-size: 13px; color: var(--gold2); font-weight: 600; display: block; margin-bottom: 6px; }
   .tb-box .tb-desc { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
   .tb-box input { margin: 0; width: 160px; }
-
-  /* Admin grid */
   .admin-series { display: grid; grid-template-columns: 1fr 100px 80px; gap: 8px; align-items: center; padding: 8px 12px; background: var(--dark3); border-radius: 8px; margin-bottom: 6px; }
   .admin-series select { margin: 0; font-size: 12px; padding: 6px 8px; }
-
   .state-buttons { display: flex; gap: 6px; }
   .loader { text-align: center; color: var(--text2); padding: 2rem; }
-
   h3 { font-size: 15px; font-weight: 600; margin-bottom: .75rem; }
   .section-gap { margin-bottom: 1.5rem; }
   label { font-size: 13px; color: var(--text2); display: block; margin-bottom: 4px; }
+
 </style>
 </head>
 <body>
@@ -353,125 +338,170 @@ function renderLogin() {
     </div>`;
 }
 
-function renderPicks() {
-  // All rounds share the same open/locked state — driven by r1_state
+function slotHtml(rid, sid, teams, labelA, labelB, r) {
   const globalState = getState('r1');
-  let html = '';
+  const pick = myPick(rid, sid);
+  const res = results[rid]?.[sid];
 
-  if (globalState === 'open') {
-    html += `<div class="card gold-border" style="margin-bottom:1rem">
-      <div style="font-size:13px;color:var(--gold2);font-weight:600;margin-bottom:4px">Set your full bracket before Round 1 locks</div>
-      <div style="font-size:13px;color:var(--text2)">Pick the winner and series length for all 4 rounds right now. For Rounds 2–4 pick whoever you think will advance. All picks lock at once before Round 1 starts — you cannot change them after that.</div>
-    </div>`;
+  let teamsHtml = '';
+  if (teams) {
+    teamsHtml = `<div class="slot-teams">Pick any team</div>
+      <select id="pw_${rid}_${sid}">
+        <option value="">Winner</option>
+        ${teams.map(t=>`<option value="${t}"${pick.winner===t?' selected':''}>${t}</option>`).join('')}
+      </select>
+      <select id="pg_${rid}_${sid}">
+        <option value="">Gms</option>
+        ${GAMES.map(g=>`<option value="${g}"${pick.games===g?' selected':''}>${g}</option>`).join('')}
+      </select>`;
+  } else {
+    teamsHtml = `<div class="slot-teams"><strong>${labelA}</strong> vs <strong>${labelB}</strong></div>
+      <select id="pw_${rid}_${sid}">
+        <option value="">Winner</option>
+        <option value="${labelA}"${pick.winner===labelA?' selected':''}>${labelA}</option>
+        <option value="${labelB}"${pick.winner===labelB?' selected':''}>${labelB}</option>
+      </select>
+      <select id="pg_${rid}_${sid}">
+        <option value="">Gms</option>
+        ${GAMES.map(g=>`<option value="${g}"${pick.games===g?' selected':''}>${g}</option>`).join('')}
+      </select>`;
   }
 
-  ROUNDS.forEach((r, ri) => {
-    const state = globalState;
-    const badgeHtml = state === 'open'
-      ? '<span class="badge badge-open">Open</span>'
-      : '<span class="badge badge-locked">Locked</span>';
+  let lockedHtml = '';
+  if (pick.winner) {
+    lockedHtml = `<div class="locked-pick">${pick.winner}</div><div class="locked-games">in ${pick.games||'?'} games</div>`;
+  } else {
+    lockedHtml = `<div class="locked-pick" style="color:var(--text2)">No pick</div>`;
+  }
+  if (res?.winner) {
+    const correct = pick.winner === res.winner;
+    const gRight = correct && pick.games === res.games;
+    const pts = (correct ? r.pts_team : 0) + (gRight ? r.pts_games : 0);
+    lockedHtml += `<div class="locked-result ${correct?'correct':'wrong'}">${res.winner} in ${res.games} · ${pts>0?'+'+pts+'pt':'0pt'}</div>`;
+  }
 
-    html += `<div class="card section-gap">
-      <div class="round-label">
-        <div>
-          <div class="round-title">${r.name}</div>
-          <div class="round-pts">${r.pts_team} pt${r.pts_team>1?'s':''} correct team · +1 pt correct games (if team right)</div>
-        </div>
-        ${badgeHtml}
-      </div>`;
+  const inner = globalState === 'open' ? teamsHtml : lockedHtml;
+  return `<div class="series-slot">${inner}</div>`;
+}
 
-    // Get matchups for this round
-    const matchups = getMatchupsForRound(ri);
+function renderPicks() {
+  const globalState = getState('r1');
+  const myTb = tiebreakers[currentUser.id] || '';
 
-    if (matchups.length === 0) {
-      html += `<div style="color:var(--text2);font-size:13px">Previous round results needed before picks open.</div>`;
-    } else if (globalState === 'open') {
-      // Editable picks
-      html += matchups.map(m => {
-        const pick = myPick(r.id, m.id);
-        const teamOpts = m.teams
-          ? m.teams.map(t => `<option value="${t}"${pick.winner===t?' selected':''}>${t}</option>`).join('')
-          : `<option value="${m.a}"${pick.winner===m.a?' selected':''}>${m.a}</option><option value="${m.b}"${pick.winner===m.b?' selected':''}>${m.b}</option>`;
-        return `<div class="matchup">
-          <div class="matchup-teams">
-            <div>${m.a || '— TBD —'} vs ${m.b || '— TBD —'}</div>
-          </div>
-          <select id="pw_${r.id}_${m.id}">
-            <option value="">Winner</option>
-            ${m.teams
-              ? m.teams.map(t=>`<option value="${t}"${pick.winner===t?' selected':''}>${t}</option>`).join('')
-              : `<option value="${m.a}"${pick.winner===m.a?' selected':''}>${m.a}</option><option value="${m.b}"${pick.winner===m.b?' selected':''}>${m.b}</option>`
-            }
-          </select>
-          <select id="pg_${r.id}_${m.id}">
-            <option value="">Gms</option>
-            ${GAMES.map(g=>`<option value="${g}"${pick.games===g?' selected':''}>${g}</option>`).join('')}
-          </select>
-        </div>`;
-      }).join('');
+  const banner = globalState === 'open'
+    ? `<div class="status-banner open">Bracket is open — fill out all 4 rounds then hit Save</div>`
+    : `<div class="status-banner locked">Bracket is locked — no more changes</div>`;
 
-      // Tiebreaker for cup final
-      if (ri === 3) {
-        const myTb = tiebreakers[currentUser.id] || '';
-        html += `<div class="tb-box">
-          <label>Tiebreaker</label>
-          <div class="tb-desc">Predict total goals scored in the Cup Final. Closest wins — you can go over.</div>
-          <input type="number" id="tb_input" placeholder="e.g. 38" value="${myTb}" style="width:160px;margin:0" />
-        </div>`;
-      }
-    } else {
-      // Locked — show picks with scoring if results exist
-      html += matchups.map(m => {
-        const pick = myPick(r.id, m.id);
-        const res = results[r.id]?.[m.id];
-        let pickLine = pick.winner ? `${pick.winner} in ${pick.games||'?'}` : '<span style="color:var(--text2)">No pick</span>';
-        let resultLine = '';
-        if (res?.winner) {
-          const correct = pick.winner === res.winner;
-          const gRight = correct && pick.games === res.games;
-          const pts = (correct ? r.pts_team : 0) + (gRight ? r.pts_games : 0);
-          resultLine = `<span class="${correct?'pick-correct':'pick-wrong'}">Result: ${res.winner} in ${res.games} — ${pts > 0 ? '+'+pts+' pts' : '0 pts'}</span>`;
-        }
-        return `<div class="matchup" style="grid-template-columns:1fr 1fr">
-          <div class="pick-display">
-            <div style="font-size:12px;color:var(--text2)">Your pick</div>
-            <div class="pick-winner">${pickLine}</div>
-          </div>
-          <div class="pick-display" style="text-align:right">
-            ${resultLine}
-          </div>
-        </div>`;
-      }).join('');
-      // Tiebreaker locked display
-      if (ri === 3) {
-        const myTb = tiebreakers[currentUser.id];
-        if (myTb) html += `<div class="tb-box"><label>Your tiebreaker</label><div style="font-size:15px;font-weight:600">${myTb} goals</div></div>`;
-      }
+  // East R1: e1,e2,e3,e4  West R1: w1,w2,w3,w4
+  const e = R1_MATCHUPS.filter(m=>m.conf==='East');
+  const w = R1_MATCHUPS.filter(m=>m.conf==='West');
+
+  // Helper to shorten team names for display
+  function short(name) { return name.split(' ').pop(); }
+
+  // Build each column
+  // Col 0: East R1 (4 slots)
+  const col0 = e.map(m => slotHtml('r1', m.id, null, m.a, m.b, ROUNDS[0])).join('');
+  // Col 1: East R2 (2 slots)
+  const col1 = ['r2_s1','r2_s2'].map(sid => slotHtml('r2', sid, ALL_TEAMS, '', '', ROUNDS[1])).join('');
+  // Col 2: East Conf Final (1 slot)
+  const col2 = slotHtml('r3', 'r3_s1', ALL_TEAMS, '', '', ROUNDS[2]);
+  // Col 3: Cup Final (center)
+  const finalPick = myPick('r4','r4_s1');
+  const finalRes = results['r4']?.['r4_s1'];
+  let finalInner = '';
+  if (globalState === 'open') {
+    finalInner = `<select id="pw_r4_r4_s1" style="margin:0 0 4px 0;font-size:11px;padding:5px 6px;width:100%">
+      <option value="">Winner</option>
+      ${ALL_TEAMS.map(t=>`<option value="${t}"${finalPick.winner===t?' selected':''}>${t}</option>`).join('')}
+    </select>
+    <select id="pg_r4_r4_s1" style="margin:0;font-size:11px;padding:5px 6px;width:100%">
+      <option value="">Gms</option>
+      ${GAMES.map(g=>`<option value="${g}"${finalPick.games===g?' selected':''}>${g}</option>`).join('')}
+    </select>`;
+  } else {
+    finalInner = finalPick.winner
+      ? `<div class="locked-pick" style="font-size:13px">${finalPick.winner}</div><div class="locked-games">in ${finalPick.games||'?'} games</div>`
+      : `<div class="locked-pick" style="color:var(--text2)">No pick</div>`;
+    if (finalRes?.winner) {
+      const correct = finalPick.winner === finalRes.winner;
+      const gRight = correct && finalPick.games === finalRes.games;
+      const pts = (correct ? 4 : 0) + (gRight ? 1 : 0);
+      finalInner += `<div class="locked-result ${correct?'correct':'wrong'}" style="font-size:11px;margin-top:4px">${finalRes.winner} · ${pts>0?'+'+pts+'pt':'0pt'}</div>`;
     }
-    html += `</div>`;
-  });
-
-  if (globalState === 'open') {
-    html += `<button class="btn-gold" id="save_all_picks" style="width:100%;padding:14px;font-size:16px;margin-bottom:1rem">Save All Picks</button>`;
   }
+  const col3 = `<div class="cup-center">
+    <div class="cup-icon">🏆</div>
+    <div class="cup-label">Cup Final</div>
+    <div class="cup-pts">4 pts</div>
+    <div class="series-slot final-slot" style="margin-top:8px;width:100%">${finalInner}</div>
+  </div>`;
+  // Col 4: West Conf Final (1 slot)
+  const col4 = slotHtml('r3', 'r3_s2', ALL_TEAMS, '', '', ROUNDS[2]);
+  // Col 5: West R2 (2 slots)
+  const col5 = ['r2_s3','r2_s4'].map(sid => slotHtml('r2', sid, ALL_TEAMS, '', '', ROUNDS[1])).join('');
+  // Col 6: West R1 (4 slots)
+  const col6 = w.map(m => slotHtml('r1', m.id, null, m.a, m.b, ROUNDS[0])).join('');
 
-  return html;
+  const tiebreaker = `<div class="tb-box">
+    <label>Tiebreaker — total goals in Cup Final</label>
+    <div class="tb-desc">Closest prediction wins ties. You can go over.</div>
+    ${globalState === 'open'
+      ? `<input type="number" id="tb_input" placeholder="e.g. 38" value="${myTb}" style="width:160px;margin:0" />`
+      : `<div style="font-size:15px;font-weight:600">${myTb || '—'} goals</div>`
+    }
+  </div>`;
+
+  const saveBtn = globalState === 'open'
+    ? `<button class="btn-gold" id="save_all_picks" style="width:100%;padding:14px;font-size:16px;margin-top:1rem">Save All Picks</button>`
+    : '';
+
+  return `
+    ${banner}
+    <div class="bracket-wrap">
+      <div class="bracket-headers">
+        <div class="bracket-header">Round 1<span class="pts-tag">1 pt</span></div>
+        <div class="bracket-header">Round 2<span class="pts-tag">2 pts</span></div>
+        <div class="bracket-header">Conf Final<span class="pts-tag">3 pts</span></div>
+        <div class="bracket-header" style="color:var(--gold)">Cup Final<span class="pts-tag">4 pts</span></div>
+        <div class="bracket-header">Conf Final<span class="pts-tag">3 pts</span></div>
+        <div class="bracket-header">Round 2<span class="pts-tag">2 pts</span></div>
+        <div class="bracket-header">Round 1<span class="pts-tag">1 pt</span></div>
+      </div>
+      <div class="bracket-headers" style="margin-bottom:8px;margin-top:-2px">
+        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">EAST</div>
+        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">EAST</div>
+        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">EAST</div>
+        <div class="bracket-header" style="border:none"></div>
+        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">WEST</div>
+        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">WEST</div>
+        <div class="bracket-header" style="border:none;color:var(--text2);font-size:10px">WEST</div>
+      </div>
+      <div class="bracket-grid">
+        <div class="bracket-col r1" style="gap:8px">${col0}</div>
+        <div class="bracket-col" style="display:flex;flex-direction:column;justify-content:space-around;gap:0;padding-top:36px;padding-bottom:36px">${col1}</div>
+        <div class="bracket-col" style="display:flex;flex-direction:column;justify-content:center;gap:0">${col2}</div>
+        ${col3}
+        <div class="bracket-col" style="display:flex;flex-direction:column;justify-content:center;gap:0">${col4}</div>
+        <div class="bracket-col" style="display:flex;flex-direction:column;justify-content:space-around;gap:0;padding-top:36px;padding-bottom:36px">${col5}</div>
+        <div class="bracket-col r1" style="gap:8px">${col6}</div>
+      </div>
+    </div>
+    ${tiebreaker}
+    ${saveBtn}`;
 }
 
 function getMatchupsForRound(ri) {
   if (ri === 0) return R1_MATCHUPS;
-  // For rounds 2+, we want all NHL teams as options (open bracket style)
   const count = ROUNDS[ri].series_count;
   const series = [];
   for (let i = 0; i < count; i++) {
-    series.push({
-      id: `r${ri+1}_s${i+1}`,
-      teams: ALL_TEAMS,
-      a: '', b: ''
-    });
+    series.push({ id: `r${ri+1}_s${i+1}`, teams: ALL_TEAMS, a: '', b: '' });
   }
   return series;
 }
+
+
 
 function renderRules() {
   return `<div class="card gold-border">
