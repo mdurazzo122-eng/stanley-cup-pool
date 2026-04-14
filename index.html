@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stanley Cup Pool 2025</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --ice: #e8f4f8;
+    --ice2: #d0e8f0;
+    --dark: #0a0f1e;
+    --dark2: #111827;
+    --dark3: #1e2a3a;
+    --gold: #c9a84c;
+    --gold2: #f0c96e;
+    --silver: #8a9ab0;
+    --text: #e2eaf4;
+    --text2: #8a9ab0;
+    --red: #e24b4a;
+    --green: #3cb371;
+    --border: rgba(201,168,76,0.2);
+    --border2: rgba(255,255,255,0.07);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--dark);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    min-height: 100vh;
+    background-image: radial-gradient(ellipse at 20% 50%, rgba(201,168,76,0.04) 0%, transparent 60%),
+                      radial-gradient(ellipse at 80% 20%, rgba(30,60,100,0.15) 0%, transparent 50%);
+  }
+  .app { max-width: 680px; margin: 0 auto; padding: 1.5rem 1rem; }
+
+  /* Header */
+  .header { text-align: center; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+  .header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 48px; letter-spacing: 3px; color: var(--gold); line-height: 1; }
+  .header .sub { font-size: 12px; letter-spacing: 4px; text-transform: uppercase; color: var(--text2); margin-top: 4px; }
+  .header .user-row { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 12px; }
+
+  /* Cards */
+  .card {
+    background: var(--dark2);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .card.gold-border { border-color: var(--border); }
+
+  /* Inputs */
+  input, select {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--dark3);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    margin-bottom: 10px;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--gold); }
+  input::placeholder { color: var(--text2); }
+  select option { background: var(--dark2); }
+
+  /* Buttons */
+  button {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: transparent;
+    color: var(--text);
+  }
+  button:hover { background: rgba(255,255,255,0.07); }
+  .btn-gold { background: var(--gold); color: var(--dark); border-color: var(--gold); font-weight: 600; }
+  .btn-gold:hover { background: var(--gold2); border-color: var(--gold2); }
+  .btn-sm { padding: 6px 12px; font-size: 13px; }
+  .btn-danger { background: rgba(226,75,74,0.15); border-color: rgba(226,75,74,0.4); color: var(--red); }
+  .btn-danger:hover { background: rgba(226,75,74,0.25); }
+  .btn-success { background: rgba(60,179,113,0.15); border-color: rgba(60,179,113,0.4); color: var(--green); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 1.5rem; background: var(--dark2); padding: 4px; border-radius: 10px; }
+  .tab { flex: 1; text-align: center; padding: 8px; border-radius: 8px; font-size: 13px; cursor: pointer; color: var(--text2); border: none; background: transparent; transition: all 0.15s; font-weight: 500; }
+  .tab.active { background: var(--dark3); color: var(--gold); border: 1px solid var(--border); }
+
+  /* Round section */
+  .round-label {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  .round-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px; color: var(--gold2); }
+  .round-pts { font-size: 12px; color: var(--text2); }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+  .badge-open { background: rgba(60,179,113,0.15); color: var(--green); border: 1px solid rgba(60,179,113,0.3); }
+  .badge-locked { background: rgba(226,75,74,0.15); color: var(--red); border: 1px solid rgba(226,75,74,0.3); }
+  .badge-pending { background: rgba(138,154,176,0.15); color: var(--text2); border: 1px solid rgba(138,154,176,0.2); }
+
+  /* Matchup row */
+  .matchup {
+    display: grid;
+    grid-template-columns: 1fr 80px 80px;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 12px;
+    background: var(--dark3);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border2);
+  }
+  .matchup-teams { font-size: 13px; color: var(--text); }
+  .matchup-teams .away { color: var(--text2); font-size: 12px; margin-top: 2px; }
+  .matchup select { margin: 0; font-size: 12px; padding: 7px 8px; }
+
+  /* Locked pick display */
+  .pick-display { font-size: 13px; }
+  .pick-winner { font-weight: 600; }
+  .pick-games { color: var(--text2); font-size: 12px; }
+  .pick-correct { color: var(--green); }
+  .pick-wrong { color: var(--red); }
+  .pick-pts { font-weight: 700; font-size: 13px; }
+
+  /* Leaderboard */
+  .lb-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border2);
+  }
+  .lb-row:last-child { border-bottom: none; }
+  .lb-rank { font-family: 'Bebas Neue', sans-serif; font-size: 24px; min-width: 36px; color: var(--text2); }
+  .lb-rank.top { color: var(--gold); }
+  .lb-name { flex: 1; font-weight: 500; }
+  .lb-pts { font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: var(--gold2); }
+  .lb-tb { font-size: 11px; color: var(--text2); }
+
+  /* Error/success */
+  .msg-error { color: var(--red); font-size: 13px; margin-bottom: 8px; }
+  .msg-success { color: var(--green); font-size: 13px; margin-bottom: 8px; }
+
+  /* Divider */
+  .divider { border: none; border-top: 1px solid var(--border2); margin: 1rem 0; }
+
+  /* Login */
+  .login-wrap { max-width: 360px; margin: 3rem auto; }
+  .login-wrap h2 { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 2px; color: var(--gold); margin-bottom: 1.5rem; }
+
+  /* Tiebreaker */
+  .tb-box { background: var(--dark3); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-top: .75rem; }
+  .tb-box label { font-size: 13px; color: var(--gold2); font-weight: 600; display: block; margin-bottom: 6px; }
+  .tb-box .tb-desc { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+  .tb-box input { margin: 0; width: 160px; }
+
+  /* Admin grid */
+  .admin-series { display: grid; grid-template-columns: 1fr 100px 80px; gap: 8px; align-items: center; padding: 8px 12px; background: var(--dark3); border-radius: 8px; margin-bottom: 6px; }
+  .admin-series select { margin: 0; font-size: 12px; padding: 6px 8px; }
+
+  .state-buttons { display: flex; gap: 6px; }
+  .loader { text-align: center; color: var(--text2); padding: 2rem; }
+
+  h3 { font-size: 15px; font-weight: 600; margin-bottom: .75rem; }
+  .section-gap { margin-bottom: 1.5rem; }
+  label { font-size: 13px; color: var(--text2); display: block; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="app" id="app"><div class="loader">Loading...</div></div>
+<script>
+const SUPABASE_URL = 'https://gggzyzoyzbrpipiejhir.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdnZ3p5em95emJycGlwaWVqaGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODE3NzEsImV4cCI6MjA5MTc1Nzc3MX0.RV-DzvvxyLXuu3h6OSa9552siHBcW6avGs2wwlpbzlY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── Bracket structure ──────────────────────────────────────────────
+// Round 1: 8 known matchups. Rounds 2-4: players predict who advances.
+const R1_MATCHUPS = [
+  // East
+  { id: 'e1', conf: 'East', seed_a: 1, a: 'Florida Panthers',    seed_b: 8, b: 'Tampa Bay Lightning' },
+  { id: 'e2', conf: 'East', seed_a: 2, a: 'Toronto Maple Leafs', seed_b: 7, b: 'Ottawa Senators' },
+  { id: 'e3', conf: 'East', seed_a: 3, a: 'Carolina Hurricanes', seed_b: 6, b: 'New Jersey Devils' },
+  { id: 'e4', conf: 'East', seed_a: 4, a: 'Washington Capitals', seed_b: 5, b: 'Montreal Canadiens' },
+  // West
+  { id: 'w1', conf: 'West', seed_a: 1, a: 'Winnipeg Jets',          seed_b: 8, b: 'St. Louis Blues' },
+  { id: 'w2', conf: 'West', seed_a: 2, a: 'Colorado Avalanche',     seed_b: 7, b: 'Dallas Stars' },
+  { id: 'w3', conf: 'West', seed_a: 3, a: 'Vegas Golden Knights',   seed_b: 6, b: 'Minnesota Wild' },
+  { id: 'w4', conf: 'West', seed_a: 4, a: 'Edmonton Oilers',        seed_b: 5, b: 'LA Kings' },
+];
+
+// All NHL playoff teams (for rounds 2+)
+const ALL_TEAMS = [...new Set(R1_MATCHUPS.flatMap(m => [m.a, m.b]))].sort();
+
+const ROUNDS = [
+  { id: 'r1', name: 'Round 1',           pts_team: 1, pts_games: 1, series_count: 8 },
+  { id: 'r2', name: 'Round 2',           pts_team: 2, pts_games: 1, series_count: 4 },
+  { id: 'r3', name: 'Conference Finals', pts_team: 3, pts_games: 1, series_count: 2 },
+  { id: 'r4', name: 'Stanley Cup Final', pts_team: 4, pts_games: 1, series_count: 1 },
+];
+const GAMES = ['4','5','6','7'];
+
+// ── App state ──────────────────────────────────────────────────────
+let currentUser = null;
+let isAdmin = false;
+let view = 'picks';
+let poolSettings = null; // { r1_state, r2_state, ... }
+let allPicks = {}; // { user_id: { r1: { e1: {winner,games}, ... }, ... } }
+let results = {}; // { r1: { e1: {winner,games}, ... } }
+let profiles = {}; // { user_id: { username, is_admin } }
+let tiebreakers = {}; // { user_id: number }
+let loginError = '';
+let regMode = false;
+let saveMsg = '';
+
+// ── Boot ───────────────────────────────────────────────────────────
+async function boot() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) await loadUser(session.user);
+  render();
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN') { await loadUser(session.user); render(); }
+    if (event === 'SIGNED_OUT') { currentUser = null; isAdmin = false; render(); }
+  });
+}
+
+async function loadUser(user) {
+  currentUser = user;
+  const { data } = await sb.from('profiles').select('*').eq('id', user.id).single();
+  isAdmin = data?.is_admin || false;
+  await refreshData();
+}
+
+async function refreshData() {
+  const [settingsRes, picksRes, resultsRes, profilesRes, tbRes] = await Promise.all([
+    sb.from('pool_settings').select('*').single(),
+    sb.from('picks').select('*'),
+    sb.from('results').select('*'),
+    sb.from('profiles').select('*'),
+    sb.from('tiebreakers').select('*'),
+  ]);
+  poolSettings = settingsRes.data || { r1_state:'open', r2_state:'locked', r3_state:'locked', r4_state:'locked' };
+  // Build picks map
+  allPicks = {};
+  (picksRes.data || []).forEach(p => {
+    if (!allPicks[p.user_id]) allPicks[p.user_id] = {};
+    if (!allPicks[p.user_id][p.round_id]) allPicks[p.user_id][p.round_id] = {};
+    allPicks[p.user_id][p.round_id][p.series_id] = { winner: p.winner, games: p.games };
+  });
+  // Build results map
+  results = {};
+  (resultsRes.data || []).forEach(r => {
+    if (!results[r.round_id]) results[r.round_id] = {};
+    results[r.round_id][r.series_id] = { winner: r.winner, games: r.games };
+  });
+  // Profiles
+  profiles = {};
+  (profilesRes.data || []).forEach(p => { profiles[p.id] = p; });
+  // Tiebreakers
+  tiebreakers = {};
+  (tbRes.data || []).forEach(t => { tiebreakers[t.user_id] = t.goals; });
+}
+
+function getState(rid) { return poolSettings?.[rid+'_state'] || 'locked'; }
+function myPick(rid, sid) { return allPicks[currentUser?.id]?.[rid]?.[sid] || {}; }
+
+// ── Scoring ────────────────────────────────────────────────────────
+function computeScores() {
+  const scores = {};
+  Object.entries(allPicks).forEach(([uid, userPicks]) => {
+    let total = 0;
+    ROUNDS.forEach(r => {
+      const state = getState(r.id);
+      if (state === 'open') return;
+      const rPicks = userPicks[r.id] || {};
+      const rResults = results[r.id] || {};
+      Object.entries(rPicks).forEach(([sid, pick]) => {
+        const res = rResults[sid];
+        if (!res || !res.winner) return;
+        if (pick.winner === res.winner) {
+          total += r.pts_team;
+          if (pick.games === res.games) total += r.pts_games;
+        }
+      });
+    });
+    scores[uid] = total;
+  });
+  return scores;
+}
+
+// ── Render ─────────────────────────────────────────────────────────
+function render() {
+  const el = document.getElementById('app');
+  if (!currentUser) { el.innerHTML = renderLogin(); attachLogin(); return; }
+  el.innerHTML = renderShell();
+  attachMain();
+}
+
+function renderShell() {
+  const username = profiles[currentUser.id]?.username || currentUser.email;
+  const tabs = [
+    { id: 'picks', label: 'My Bracket' },
+    { id: 'leaderboard', label: 'Leaderboard' },
+  ];
+  if (isAdmin) tabs.push({ id: 'admin', label: 'Admin' });
+  const tabHtml = tabs.map(t =>
+    `<button class="tab${view===t.id?' active':''}" data-tab="${t.id}">${t.label}</button>`
+  ).join('');
+  let content = '';
+  if (view === 'picks') content = renderPicks();
+  else if (view === 'leaderboard') content = renderLeaderboard();
+  else if (view === 'admin') content = renderAdmin();
+  return `
+    <div class="header">
+      <h1>Stanley Cup Pool</h1>
+      <div class="sub">2025 Playoffs</div>
+      <div class="user-row">
+        <span style="font-size:13px;color:var(--text2)">${username}</span>
+        <button class="btn-sm" id="logout_btn">Sign out</button>
+      </div>
+    </div>
+    <div class="tabs">${tabHtml}</div>
+    ${saveMsg ? `<div class="msg-success" style="text-align:center;margin-bottom:.75rem">${saveMsg}</div>` : ''}
+    ${content}`;
+}
+
+function renderLogin() {
+  return `
+    <div class="header"><h1>Stanley Cup Pool</h1><div class="sub">2025 Playoffs</div></div>
+    <div class="login-wrap">
+      <h2>${regMode ? 'Create Account' : 'Sign In'}</h2>
+      ${loginError ? `<div class="msg-error">${loginError}</div>` : ''}
+      <label>Username</label>
+      <input id="l_user" placeholder="yourname" autocomplete="username" />
+      <label>Password</label>
+      <input id="l_pass" type="password" placeholder="••••••••" autocomplete="${regMode?'new-password':'current-password'}" />
+      ${regMode ? `<label>Confirm password</label><input id="l_pass2" type="password" placeholder="••••••••" autocomplete="new-password" />` : ''}
+      <button class="btn-gold" id="l_submit" style="width:100%;margin-top:4px">${regMode ? 'Join the Pool' : 'Sign In'}</button>
+      <div style="margin-top:12px;font-size:13px;color:var(--text2);text-align:center">
+        ${regMode
+          ? `Have an account? <span style="color:var(--gold);cursor:pointer" id="l_toggle">Sign in</span>`
+          : `New player? <span style="color:var(--gold);cursor:pointer" id="l_toggle">Create account</span>`}
+      </div>
+    </div>`;
+}
+
+function renderPicks() {
+  const isLocked = ROUNDS.every(r => getState(r.id) !== 'open');
+  let html = '';
+
+  // Instruction banner
+  const r1State = getState('r1');
+  if (r1State === 'open') {
+    html += `<div class="card gold-border" style="margin-bottom:1rem">
+      <div style="font-size:13px;color:var(--gold2);font-weight:600;margin-bottom:4px">Set your full bracket now</div>
+      <div style="font-size:13px;color:var(--text2)">Pick the winner and series length for all 4 rounds before Round 1 locks. You're predicting who you think will advance — picks can't be changed once a round locks.</div>
+    </div>`;
+  }
+
+  ROUNDS.forEach((r, ri) => {
+    const state = getState(r.id);
+    const badgeHtml = state === 'open'
+      ? '<span class="badge badge-open">Open</span>'
+      : state === 'locked'
+      ? '<span class="badge badge-locked">Locked</span>'
+      : '<span class="badge badge-pending">Pending</span>';
+
+    html += `<div class="card section-gap">
+      <div class="round-label">
+        <div>
+          <div class="round-title">${r.name}</div>
+          <div class="round-pts">${r.pts_team} pt${r.pts_team>1?'s':''} correct team · +1 pt correct games (if team right)</div>
+        </div>
+        ${badgeHtml}
+      </div>`;
+
+    // Get matchups for this round
+    const matchups = getMatchupsForRound(ri);
+
+    if (matchups.length === 0) {
+      html += `<div style="color:var(--text2);font-size:13px">Previous round results needed before picks open.</div>`;
+    } else if (state === 'open') {
+      // Editable picks
+      html += matchups.map(m => {
+        const pick = myPick(r.id, m.id);
+        const teamOpts = m.teams
+          ? m.teams.map(t => `<option value="${t}"${pick.winner===t?' selected':''}>${t}</option>`).join('')
+          : `<option value="${m.a}"${pick.winner===m.a?' selected':''}>${m.a}</option><option value="${m.b}"${pick.winner===m.b?' selected':''}>${m.b}</option>`;
+        return `<div class="matchup">
+          <div class="matchup-teams">
+            <div>${m.a || '— TBD —'} vs ${m.b || '— TBD —'}</div>
+          </div>
+          <select id="pw_${r.id}_${m.id}">
+            <option value="">Winner</option>
+            ${m.teams
+              ? m.teams.map(t=>`<option value="${t}"${pick.winner===t?' selected':''}>${t}</option>`).join('')
+              : `<option value="${m.a}"${pick.winner===m.a?' selected':''}>${m.a}</option><option value="${m.b}"${pick.winner===m.b?' selected':''}>${m.b}</option>`
+            }
+          </select>
+          <select id="pg_${r.id}_${m.id}">
+            <option value="">Gms</option>
+            ${GAMES.map(g=>`<option value="${g}"${pick.games===g?' selected':''}>${g}</option>`).join('')}
+          </select>
+        </div>`;
+      }).join('');
+
+      // Tiebreaker for cup final
+      if (ri === 3) {
+        const myTb = tiebreakers[currentUser.id] || '';
+        html += `<div class="tb-box">
+          <label>Tiebreaker</label>
+          <div class="tb-desc">Predict total goals scored in the Cup Final. Closest wins (no Price is Right rules — you can go over).</div>
+          <input type="number" id="tb_input" placeholder="e.g. 38" value="${myTb}" style="width:160px;margin:0" />
+        </div>`;
+      }
+      html += `<button class="btn-gold" id="save_${r.id}" data-round="${r.id}" style="margin-top:1rem">Save ${r.name} picks</button>`;
+    } else {
+      // Locked — show picks with scoring if results exist
+      html += matchups.map(m => {
+        const pick = myPick(r.id, m.id);
+        const res = results[r.id]?.[m.id];
+        let pickLine = pick.winner ? `${pick.winner} in ${pick.games||'?'}` : '<span style="color:var(--text2)">No pick</span>';
+        let resultLine = '';
+        if (res?.winner) {
+          const correct = pick.winner === res.winner;
+          const gRight = correct && pick.games === res.games;
+          const pts = (correct ? r.pts_team : 0) + (gRight ? r.pts_games : 0);
+          resultLine = `<span class="${correct?'pick-correct':'pick-wrong'}">Result: ${res.winner} in ${res.games} — ${pts > 0 ? '+'+pts+' pts' : '0 pts'}</span>`;
+        }
+        return `<div class="matchup" style="grid-template-columns:1fr 1fr">
+          <div class="pick-display">
+            <div style="font-size:12px;color:var(--text2)">Your pick</div>
+            <div class="pick-winner">${pickLine}</div>
+          </div>
+          <div class="pick-display" style="text-align:right">
+            ${resultLine}
+          </div>
+        </div>`;
+      }).join('');
+      // Tiebreaker locked display
+      if (ri === 3) {
+        const myTb = tiebreakers[currentUser.id];
+        if (myTb) html += `<div class="tb-box"><label>Your tiebreaker</label><div style="font-size:15px;font-weight:600">${myTb} goals</div></div>`;
+      }
+    }
+    html += `</div>`;
+  });
+
+  return html;
+}
+
+function getMatchupsForRound(ri) {
+  if (ri === 0) return R1_MATCHUPS;
+  // For rounds 2+, we want all NHL teams as options (open bracket style)
+  const count = ROUNDS[ri].series_count;
+  const series = [];
+  for (let i = 0; i < count; i++) {
+    series.push({
+      id: `r${ri+1}_s${i+1}`,
+      teams: ALL_TEAMS,
+      a: '', b: ''
+    });
+  }
+  return series;
+}
+
+function renderLeaderboard() {
+  const scores = computeScores();
+  // Add zero-score users
+  Object.keys(profiles).forEach(uid => { if (scores[uid] == null) scores[uid] = 0; });
+  const sorted = Object.entries(scores).sort((a,b) => b[1]-a[1]);
+  if (sorted.length === 0) return `<div class="card"><div style="color:var(--text2)">No players yet.</div></div>`;
+
+  let html = `<div class="card"><h3>Standings</h3>`;
+  sorted.forEach(([uid, pts], i) => {
+    const name = profiles[uid]?.username || uid;
+    const tb = tiebreakers[uid] ? `TB: ${tiebreakers[uid]} goals` : '';
+    html += `<div class="lb-row">
+      <div class="lb-rank${i<3?' top':''}">${i+1}</div>
+      <div class="lb-name">${name}<div class="lb-tb">${tb}</div></div>
+      <div class="lb-pts">${pts}</div>
+    </div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+
+function renderAdmin() {
+  let html = `<div class="card gold-border">
+    <h3 style="color:var(--gold2)">Round Control</h3>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:1rem">Open a round to allow picks. Lock it to freeze picks before play starts.</div>`;
+
+  ROUNDS.forEach(r => {
+    const state = getState(r.id);
+    html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border2)">
+      <div>
+        <div style="font-weight:500">${r.name}</div>
+        <div style="font-size:12px;color:var(--text2)">Currently: ${state}</div>
+      </div>
+      <div class="state-buttons">
+        <button class="btn-sm btn-success" data-action="setstate" data-round="${r.id}" data-state="open">Open</button>
+        <button class="btn-sm btn-danger" data-action="setstate" data-round="${r.id}" data-state="locked">Lock</button>
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+
+  // Results entry
+  html += `<div class="card" style="margin-top:1rem"><h3>Enter Results</h3>`;
+  ROUNDS.forEach((r, ri) => {
+    const matchups = ri === 0 ? R1_MATCHUPS : (() => {
+      const count = r.series_count;
+      const arr = [];
+      for (let i = 0; i < count; i++) arr.push({ id: `r${ri+1}_s${i+1}`, teams: ALL_TEAMS });
+      return arr;
+    })();
+    html += `<div style="margin-bottom:1.25rem">
+      <div style="font-size:13px;font-weight:600;color:var(--gold2);margin-bottom:.5rem">${r.name}</div>`;
+    matchups.forEach(m => {
+      const res = results[r.id]?.[m.id] || {};
+      const teamOpts = m.teams
+        ? m.teams.map(t=>`<option value="${t}"${res.winner===t?' selected':''}>${t}</option>`).join('')
+        : `<option value="${m.a}"${res.winner===m.a?' selected':''}>${m.a}</option><option value="${m.b}"${res.winner===m.b?' selected':''}>${m.b}</option>`;
+      html += `<div class="admin-series">
+        <div style="font-size:13px">${m.a && m.b ? `${m.a} vs ${m.b}` : `Series ${m.id}`}</div>
+        <select id="rw_${r.id}_${m.id}">
+          <option value="">Winner</option>
+          ${teamOpts}
+        </select>
+        <select id="rg_${r.id}_${m.id}">
+          <option value="">Gms</option>
+          ${GAMES.map(g=>`<option value="${g}"${res.games===g?' selected':''}>${g}</option>`).join('')}
+        </select>
+      </div>`;
+    });
+    html += `<button class="btn-sm btn-gold" data-action="saveresults" data-round="${r.id}" data-ri="${ri}" style="margin-top:4px">Save ${r.name} results</button></div>`;
+  });
+
+  // TB result
+  const tbActual = tiebreakers['__result__'] || '';
+  html += `<hr class="divider"><div style="font-size:13px;font-weight:600;color:var(--gold2);margin-bottom:.5rem">Cup Final tiebreaker — actual goals</div>
+    <input type="number" id="tb_actual" placeholder="Total goals" value="${tbActual}" style="width:160px;margin-bottom:8px" />
+    <button class="btn-sm btn-gold" data-action="savetb">Save</button>`;
+
+  html += `</div>`;
+  return html;
+}
+
+// ── Attach events ──────────────────────────────────────────────────
+function attachLogin() {
+  document.getElementById('l_submit').onclick = handleLogin;
+  document.getElementById('l_toggle').onclick = () => { regMode = !regMode; loginError = ''; render(); };
+  document.querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('l_submit').click(); }));
+}
+
+async function handleLogin() {
+  const username = document.getElementById('l_user').value.trim().toLowerCase();
+  const pass = document.getElementById('l_pass').value;
+  if (!username || !pass) { loginError = 'Please fill in all fields.'; render(); return; }
+  const email = username + '@stanleycuppool.local';
+  if (regMode) {
+    const pass2 = document.getElementById('l_pass2').value;
+    if (pass !== pass2) { loginError = "Passwords don't match."; render(); return; }
+    const { data, error } = await sb.auth.signUp({ email, password: pass });
+    if (error) { loginError = error.message; render(); return; }
+    // Save username to profile
+    if (data.user) {
+      await sb.from('profiles').upsert({ id: data.user.id, username, is_admin: false });
+    }
+  } else {
+    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+    if (error) { loginError = 'Invalid username or password.'; render(); return; }
+  }
+}
+
+function attachMain() {
+  document.getElementById('logout_btn').onclick = () => sb.auth.signOut();
+  document.querySelectorAll('.tab').forEach(t => {
+    t.onclick = () => { view = t.dataset.tab; saveMsg = ''; render(); };
+  });
+
+  // Save picks buttons
+  ROUNDS.forEach((r, ri) => {
+    const btn = document.getElementById(`save_${r.id}`);
+    if (!btn) return;
+    btn.onclick = async () => {
+      const matchups = getMatchupsForRound(ri);
+      const upserts = [];
+      matchups.forEach(m => {
+        const w = document.getElementById(`pw_${r.id}_${m.id}`)?.value;
+        const g = document.getElementById(`pg_${r.id}_${m.id}`)?.value;
+        if (w) upserts.push({ user_id: currentUser.id, round_id: r.id, series_id: m.id, winner: w, games: g || null });
+      });
+      if (upserts.length > 0) {
+        await sb.from('picks').upsert(upserts, { onConflict: 'user_id,round_id,series_id' });
+      }
+      // Tiebreaker
+      if (ri === 3) {
+        const tbEl = document.getElementById('tb_input');
+        if (tbEl?.value) {
+          await sb.from('tiebreakers').upsert({ user_id: currentUser.id, goals: parseInt(tbEl.value) }, { onConflict: 'user_id' });
+        }
+      }
+      await refreshData();
+      saveMsg = `${r.name} picks saved!`;
+      render();
+      setTimeout(() => { saveMsg = ''; render(); }, 3000);
+    };
+  });
+
+  // Admin actions
+  document.querySelectorAll('[data-action="setstate"]').forEach(btn => {
+    btn.onclick = async () => {
+      const update = {};
+      update[btn.dataset.round + '_state'] = btn.dataset.state;
+      await sb.from('pool_settings').update(update).eq('id', 1);
+      await refreshData();
+      render();
+    };
+  });
+
+  document.querySelectorAll('[data-action="saveresults"]').forEach(btn => {
+    btn.onclick = async () => {
+      const rid = btn.dataset.round;
+      const ri = parseInt(btn.dataset.ri);
+      const matchups = ri === 0 ? R1_MATCHUPS : (() => {
+        const count = ROUNDS[ri].series_count;
+        const arr = [];
+        for (let i = 0; i < count; i++) arr.push({ id: `r${ri+1}_s${i+1}` });
+        return arr;
+      })();
+      const upserts = [];
+      matchups.forEach(m => {
+        const w = document.getElementById(`rw_${rid}_${m.id}`)?.value;
+        const g = document.getElementById(`rg_${rid}_${m.id}`)?.value;
+        if (w) upserts.push({ round_id: rid, series_id: m.id, winner: w, games: g || null });
+      });
+      if (upserts.length > 0) {
+        await sb.from('results').upsert(upserts, { onConflict: 'round_id,series_id' });
+      }
+      await refreshData();
+      saveMsg = 'Results saved!';
+      render();
+    };
+  });
+
+  const savetbBtn = document.querySelector('[data-action="savetb"]');
+  if (savetbBtn) savetbBtn.onclick = async () => {
+    const v = document.getElementById('tb_actual')?.value;
+    if (v) await sb.from('tiebreakers').upsert({ user_id: '__result__', goals: parseInt(v) }, { onConflict: 'user_id' });
+    await refreshData();
+    saveMsg = 'Tiebreaker result saved!';
+    render();
+  };
+}
+
+boot();
+</script>
+</body>
+</html>
