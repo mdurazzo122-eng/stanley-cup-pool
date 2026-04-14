@@ -303,12 +303,17 @@ function myPick(rid, sid) { return allPicks[currentUser?.id]?.[rid]?.[sid] || {}
 function computeScores() {
   const scores = {};
   const globalState = getState('r1');
+  // Don't score anything while picks are still open
+  if (globalState === 'open') {
+    Object.keys(allPicks).forEach(uid => { scores[uid] = 0; });
+    return scores;
+  }
   Object.entries(allPicks).forEach(([uid, userPicks]) => {
     let total = 0;
     ROUNDS.forEach(r => {
-      if (globalState === 'open') return;
       const rPicks = userPicks[r.id] || {};
       const rResults = results[r.id] || {};
+      // Only score series that have a result entered
       Object.entries(rPicks).forEach(([sid, pick]) => {
         const res = rResults[sid];
         if (!res || !res.winner) return;
@@ -776,16 +781,28 @@ function renderAllBrackets() {
   // Sort by score desc
   userIds.sort((a,b) => (scores[b]||0) - (scores[a]||0));
 
-  // All series in order
+  // All series in order — West left, East right (matches bracket layout)
   const SERIES = [
-    {rid:'r1',sid:'e1',label:'R1 East 1'}, {rid:'r1',sid:'e2',label:'R1 East 2'},
-    {rid:'r1',sid:'e3',label:'R1 East 3'}, {rid:'r1',sid:'e4',label:'R1 East 4'},
-    {rid:'r1',sid:'w1',label:'R1 West 1'}, {rid:'r1',sid:'w2',label:'R1 West 2'},
-    {rid:'r1',sid:'w3',label:'R1 West 3'}, {rid:'r1',sid:'w4',label:'R1 West 4'},
-    {rid:'r2',sid:'r2_s1',label:'R2 E-1'}, {rid:'r2',sid:'r2_s2',label:'R2 E-2'},
-    {rid:'r2',sid:'r2_s3',label:'R2 W-1'}, {rid:'r2',sid:'r2_s4',label:'R2 W-2'},
-    {rid:'r3',sid:'r3_s1',label:'ECF'}, {rid:'r3',sid:'r3_s2',label:'WCF'},
+    {rid:'r1',sid:'w1',label:'R1 W-1'}, {rid:'r1',sid:'w2',label:'R1 W-2'},
+    {rid:'r1',sid:'w3',label:'R1 W-3'}, {rid:'r1',sid:'w4',label:'R1 W-4'},
+    {rid:'r2',sid:'r2_s1',label:'R2 W-1'}, {rid:'r2',sid:'r2_s2',label:'R2 W-2'},
+    {rid:'r3',sid:'r3_s1',label:'WCF'},
     {rid:'r4',sid:'r4_s1',label:'Cup Final'},
+    {rid:'r3',sid:'r3_s2',label:'ECF'},
+    {rid:'r2',sid:'r2_s3',label:'R2 E-1'}, {rid:'r2',sid:'r2_s4',label:'R2 E-2'},
+    {rid:'r1',sid:'e1',label:'R1 E-1'}, {rid:'r1',sid:'e2',label:'R1 E-2'},
+    {rid:'r1',sid:'e3',label:'R1 E-3'}, {rid:'r1',sid:'e4',label:'R1 E-4'},
+  ];
+
+  // Group headers match bracket order
+  const groups = [
+    {label:'Round 1 — West', cols:4},
+    {label:'Round 2 — West', cols:2},
+    {label:'WCF', cols:1},
+    {label:'🏆 Final', cols:1},
+    {label:'ECF', cols:1},
+    {label:'Round 2 — East', cols:2},
+    {label:'Round 1 — East', cols:4},
   ];
 
   function pickStyle(rid, sid, winner) {
@@ -802,14 +819,6 @@ function renderAllBrackets() {
           <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);color:var(--gold2);font-weight:600;white-space:nowrap">Player</th>
           <th style="padding:6px 4px;border-bottom:1px solid var(--border);color:var(--gold2);text-align:right;white-space:nowrap">Pts</th>`;
 
-  // Group headers
-  const groups = [
-    {label:'Round 1 — East', cols:4},
-    {label:'Round 1 — West', cols:4},
-    {label:'Round 2', cols:4},
-    {label:'Conf Finals', cols:2},
-    {label:'Cup Final', cols:1},
-  ];
   groups.forEach(g => {
     html += `<th colspan="${g.cols}" style="padding:6px 8px;border-bottom:1px solid var(--border);border-left:1px solid var(--border2);color:var(--text2);font-size:11px;letter-spacing:1px;text-align:center">${g.label}</th>`;
   });
@@ -817,7 +826,7 @@ function renderAllBrackets() {
 
   // Series sub-headers with actual matchup labels
   SERIES.forEach((s, i) => {
-    const borderLeft = [0,4,8,12,14].includes(i) ? 'border-left:1px solid var(--border2);' : '';
+    const borderLeft = [0,4,6,7,8,10,11].includes(i) ? 'border-left:1px solid var(--border2);' : '';
     let matchLabel = s.label;
     if (s.rid === 'r1') {
       const m = R1_MATCHUPS.find(m => m.id === s.sid);
@@ -838,7 +847,7 @@ function renderAllBrackets() {
 
     SERIES.forEach((s, i) => {
       const pick = allPicks[uid]?.[s.rid]?.[s.sid] || {};
-      const borderLeft = [0,4,8,12,14].includes(i) ? 'border-left:1px solid var(--border2);' : '';
+      const borderLeft = [0,4,6,7,8,10,11].includes(i) ? 'border-left:1px solid var(--border2);' : '';
       const style = pickStyle(s.rid, s.sid, pick.winner);
       const shortName = pick.winner ? pick.winner.split(' ').pop() : '—';
       const games = pick.games ? ` (${pick.games})` : '';
@@ -853,7 +862,7 @@ function renderAllBrackets() {
     <td></td>`;
   SERIES.forEach((s, i) => {
     const res = results[s.rid]?.[s.sid];
-    const borderLeft = [0,4,8,12,14].includes(i) ? 'border-left:1px solid var(--border2);' : '';
+    const borderLeft = [0,4,6,7,8,10,11].includes(i) ? 'border-left:1px solid var(--border2);' : '';
     const short = res?.winner ? res.winner.split(' ').pop() : '—';
     const games = res?.games ? ` (${res.games})` : '';
     html += `<td style="padding:6px 4px;text-align:center;${borderLeft}color:var(--gold2);font-weight:600;font-size:11px">${short}${games}</td>`;
