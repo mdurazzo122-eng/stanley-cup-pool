@@ -1180,35 +1180,39 @@ function attachMain() {
     setTimeout(() => { refreshBracket(); refreshMobileCascade(); }, 0);
   }
 
-  // Mobile save button — reads from mobile selects
-  const mobileSaveBtn = document.getElementById('save_all_picks_mobile');
-  if (mobileSaveBtn) {
-    mobileSaveBtn.onclick = async () => {
-      if (!activeEntryId) { alert('No active entry — add an entry first.'); return; }
-      mobileSaveBtn.textContent = 'Saving...';
-      mobileSaveBtn.disabled = true;
+  // Shared save logic with auto-retry for cold connection failures
+  async function doSavePicks(btn) {
+    if (!activeEntryId) { alert('No active entry — add an entry first.'); return; }
+    const origText = btn.textContent;
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+
+    const allSeries = [
+      {rid:'r1',sid:'e1'},{rid:'r1',sid:'e2'},{rid:'r1',sid:'e3'},{rid:'r1',sid:'e4'},
+      {rid:'r1',sid:'w1'},{rid:'r1',sid:'w2'},{rid:'r1',sid:'w3'},{rid:'r1',sid:'w4'},
+      {rid:'r2',sid:'r2_s1'},{rid:'r2',sid:'r2_s2'},{rid:'r2',sid:'r2_s3'},{rid:'r2',sid:'r2_s4'},
+      {rid:'r3',sid:'r3_s1'},{rid:'r3',sid:'r3_s2'},
+      {rid:'r4',sid:'r4_s1'},
+    ];
+    const upserts = [];
+    allSeries.forEach(({rid,sid}) => {
+      const w = document.getElementById(`mpw_${rid}_${sid}`)?.value || document.getElementById(`pw_${rid}_${sid}`)?.value;
+      const g = document.getElementById(`mpg_${rid}_${sid}`)?.value || document.getElementById(`pg_${rid}_${sid}`)?.value;
+      if (w) upserts.push({ entry_id: activeEntryId, user_id: currentUser.id, round_id: rid, series_id: sid, winner: w, games: g || null });
+    });
+    const tbEl = document.getElementById('tb_input_mobile') || document.getElementById('tb_input');
+    const tbValue = tbEl?.value ? parseInt(tbEl.value) : null;
+
+    // Retry up to 3 times on network errors
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const allSeries = [
-          {rid:'r1',sid:'e1'},{rid:'r1',sid:'e2'},{rid:'r1',sid:'e3'},{rid:'r1',sid:'e4'},
-          {rid:'r1',sid:'w1'},{rid:'r1',sid:'w2'},{rid:'r1',sid:'w3'},{rid:'r1',sid:'w4'},
-          {rid:'r2',sid:'r2_s1'},{rid:'r2',sid:'r2_s2'},{rid:'r2',sid:'r2_s3'},{rid:'r2',sid:'r2_s4'},
-          {rid:'r3',sid:'r3_s1'},{rid:'r3',sid:'r3_s2'},
-          {rid:'r4',sid:'r4_s1'},
-        ];
-        const upserts = [];
-        allSeries.forEach(({rid,sid}) => {
-          const w = document.getElementById(`mpw_${rid}_${sid}`)?.value || document.getElementById(`pw_${rid}_${sid}`)?.value;
-          const g = document.getElementById(`mpg_${rid}_${sid}`)?.value || document.getElementById(`pg_${rid}_${sid}`)?.value;
-          if (w) upserts.push({ entry_id: activeEntryId, user_id: currentUser.id, round_id: rid, series_id: sid, winner: w, games: g || null });
-        });
         if (upserts.length > 0) {
           const { error } = await sb.from('picks').upsert(upserts, { onConflict: 'entry_id,round_id,series_id' });
           if (error) throw new Error('Picks: ' + error.message);
         }
-        const tbEl = document.getElementById('tb_input_mobile') || document.getElementById('tb_input');
-        if (tbEl?.value) {
+        if (tbValue) {
           const { error } = await sb.from('tiebreakers').upsert(
-            { entry_id: activeEntryId, user_id: currentUser.id, goals: parseInt(tbEl.value) },
+            { entry_id: activeEntryId, user_id: currentUser.id, goals: tbValue },
             { onConflict: 'entry_id' }
           );
           if (error) throw new Error('Tiebreaker: ' + error.message);
@@ -1217,58 +1221,30 @@ function attachMain() {
         saveMsg = `Picks saved! (${upserts.length} series)`;
         render();
         setTimeout(() => { saveMsg = ''; render(); }, 4000);
+        return; // success
       } catch (err) {
-        alert('Save failed: ' + err.message + '\n\nCheck the browser console for details.');
-        mobileSaveBtn.textContent = 'Save All Picks';
-        mobileSaveBtn.disabled = false;
+        const isNetworkError = err.message.includes('fetch') || err.message.includes('network') || err.message.includes('TypeError');
+        if (attempt < 3 && isNetworkError) {
+          btn.textContent = `Retrying (${attempt})...`;
+          await new Promise(res => setTimeout(res, 1200));
+          continue;
+        }
+        // All retries failed or non-network error
+        alert('Save failed: ' + err.message + '\n\nCheck your connection and try again.');
+        btn.textContent = origText;
+        btn.disabled = false;
+        return;
       }
-    };
+    }
   }
 
-  // Save ALL picks at once
+  // Save ALL picks at once — desktop
   const saveAllBtn = document.getElementById('save_all_picks');
-  if (saveAllBtn) {
-    saveAllBtn.onclick = async () => {
-      if (!activeEntryId) { alert('No active entry — add an entry first.'); return; }
-      saveAllBtn.textContent = 'Saving...';
-      saveAllBtn.disabled = true;
-      try {
-        const allSeries = [
-          {rid:'r1',sid:'e1'},{rid:'r1',sid:'e2'},{rid:'r1',sid:'e3'},{rid:'r1',sid:'e4'},
-          {rid:'r1',sid:'w1'},{rid:'r1',sid:'w2'},{rid:'r1',sid:'w3'},{rid:'r1',sid:'w4'},
-          {rid:'r2',sid:'r2_s1'},{rid:'r2',sid:'r2_s2'},{rid:'r2',sid:'r2_s3'},{rid:'r2',sid:'r2_s4'},
-          {rid:'r3',sid:'r3_s1'},{rid:'r3',sid:'r3_s2'},
-          {rid:'r4',sid:'r4_s1'},
-        ];
-        const upserts = [];
-        allSeries.forEach(({rid,sid}) => {
-          const w = document.getElementById(`pw_${rid}_${sid}`)?.value;
-          const g = document.getElementById(`pg_${rid}_${sid}`)?.value;
-          if (w) upserts.push({ entry_id: activeEntryId, user_id: currentUser.id, round_id: rid, series_id: sid, winner: w, games: g || null });
-        });
-        if (upserts.length > 0) {
-          const { error } = await sb.from('picks').upsert(upserts, { onConflict: 'entry_id,round_id,series_id' });
-          if (error) throw new Error('Picks: ' + error.message);
-        }
-        const tbEl = document.getElementById('tb_input');
-        if (tbEl?.value) {
-          const { error } = await sb.from('tiebreakers').upsert(
-            { entry_id: activeEntryId, user_id: currentUser.id, goals: parseInt(tbEl.value) },
-            { onConflict: 'entry_id' }
-          );
-          if (error) throw new Error('Tiebreaker: ' + error.message);
-        }
-        await refreshData();
-        saveMsg = `Picks saved! (${upserts.length} series)`;
-        render();
-        setTimeout(() => { saveMsg = ''; render(); }, 4000);
-      } catch (err) {
-        alert('Save failed: ' + err.message + '\n\nCheck the browser console for details and let your admin know.');
-        saveAllBtn.textContent = 'Save All Picks';
-        saveAllBtn.disabled = false;
-      }
-    };
-  }
+  if (saveAllBtn) saveAllBtn.onclick = () => doSavePicks(saveAllBtn);
+
+  // Save ALL picks — mobile
+  const mobileSaveBtn = document.getElementById('save_all_picks_mobile');
+  if (mobileSaveBtn) mobileSaveBtn.onclick = () => doSavePicks(mobileSaveBtn);
 
   // Admin — lock/open all rounds at once
   document.querySelectorAll('[data-action="setallstate"]').forEach(btn => {
