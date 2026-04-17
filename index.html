@@ -1207,7 +1207,13 @@ function attachMain() {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         if (upserts.length > 0) {
-          const { error } = await sb.from('picks').upsert(upserts, { onConflict: 'entry_id,round_id,series_id' });
+          // Delete existing picks for this entry first, then insert fresh
+          // This avoids upsert conflict issues entirely
+          const { error: delError } = await sb.from('picks')
+            .delete()
+            .eq('entry_id', activeEntryId);
+          if (delError) throw new Error('Picks (clear): ' + delError.message);
+          const { error } = await sb.from('picks').insert(upserts);
           if (error) throw new Error('Picks: ' + error.message);
         }
         if (tbValue) {
