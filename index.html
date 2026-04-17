@@ -1059,7 +1059,7 @@ function renderAdmin() {
 
   html += `</div>`;
 
-  // Players list
+  // Players list + picks editor (only when open)
   const playerList = Object.entries(profiles).sort((a,b) => a[1].username?.localeCompare(b[1].username));
   html += `<div class="card" style="margin-top:1rem">
     <h3>Players (${playerList.length})</h3>
@@ -1073,10 +1073,78 @@ function renderAdmin() {
       </div>`).join('')}
   </div>`;
 
+  // Player picks editor — only show when bracket is open
+  if (globalState === 'open' && allEntries.length > 0) {
+    html += `<div class="card" style="margin-top:1rem">
+      <h3>Edit Player Picks</h3>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:1rem">Select a player entry to view and edit their bracket on their behalf.</div>
+      <select id="admin_entry_select" style="margin-bottom:1rem">
+        <option value="">— Select a player entry —</option>
+        ${allEntries.map(e => {
+          const owner = profiles[e.user_id];
+          const name = owner?.username || '?';
+          const multiEntry = allEntries.filter(x => x.user_id === e.user_id).length > 1;
+          return `<option value="${e.id}">${name}${multiEntry ? ' — ' + e.name : ''}</option>`;
+        }).join('')}
+      </select>
+      <div id="admin_picks_editor"></div>
+    </div>`;
+  }
+
   return html;
 }
 
-// ── Attach events ──────────────────────────────────────────────────
+function renderAdminPicksEditor(entryId) {
+  const entry = allEntries.find(e => e.id === entryId);
+  if (!entry) return '';
+  const owner = profiles[entry.user_id];
+  const name = owner?.username || '?';
+  const picks = allPicks[entryId] || {};
+  const tb = tiebreakers[entryId] || '';
+
+  const ALL_SERIES = [
+    {rid:'r1',sid:'e1',label:'East S1'}, {rid:'r1',sid:'e2',label:'East S2'},
+    {rid:'r1',sid:'e3',label:'East S3'}, {rid:'r1',sid:'e4',label:'East S4'},
+    {rid:'r1',sid:'w1',label:'West S1'}, {rid:'r1',sid:'w2',label:'West S2'},
+    {rid:'r1',sid:'w3',label:'West S3'}, {rid:'r1',sid:'w4',label:'West S4'},
+    {rid:'r2',sid:'r2_s1',label:'R2 W1'}, {rid:'r2',sid:'r2_s2',label:'R2 W2'},
+    {rid:'r2',sid:'r2_s3',label:'R2 E1'}, {rid:'r2',sid:'r2_s4',label:'R2 E2'},
+    {rid:'r3',sid:'r3_s1',label:'WCF'},   {rid:'r3',sid:'r3_s2',label:'ECF'},
+    {rid:'r4',sid:'r4_s1',label:'Cup Final'},
+  ];
+
+  let html = `<div style="border-top:1px solid var(--border2);padding-top:1rem;margin-top:.5rem">
+    <div style="font-size:13px;font-weight:600;color:var(--gold2);margin-bottom:.75rem">Editing: ${name}${allEntries.filter(e=>e.user_id===entry.user_id).length>1?' — '+entry.name:''}</div>`;
+
+  ALL_SERIES.forEach(({rid, sid, label}) => {
+    const pick = picks[rid]?.[sid] || {};
+    const r1match = R1_MATCHUPS.find(m => m.id === sid);
+    const teamOpts = r1match
+      ? [r1match.a, r1match.b].map(t => `<option value="${t}"${pick.winner===t?' selected':''}>${t}</option>`).join('')
+      : ALL_TEAMS.map(t => `<option value="${t}"${pick.winner===t?' selected':''}>${t}</option>`).join('');
+    html += `<div class="admin-series" style="margin-bottom:6px">
+      <div style="font-size:12px;color:var(--text2)">${label}</div>
+      <select id="adm_pw_${rid}_${sid}">
+        <option value="">Winner</option>${teamOpts}
+      </select>
+      <select id="adm_pg_${rid}_${sid}">
+        <option value="">Gms</option>
+        ${GAMES.map(g=>`<option value="${g}"${pick.games===g?' selected':''}>${g}</option>`).join('')}
+      </select>
+    </div>`;
+  });
+
+  html += `<div style="display:flex;align-items:center;gap:10px;margin-top:.75rem">
+    <div style="font-size:13px;color:var(--text2)">Tiebreaker (goals):</div>
+    <input type="number" id="adm_tb_${entryId}" placeholder="e.g. 38" value="${tb}" style="width:100px;margin:0;font-size:13px;padding:7px 10px" />
+  </div>
+  <button class="btn-gold" data-action="admin_save_picks" data-entry="${entryId}" data-userid="${entry.user_id}" style="margin-top:.75rem;width:100%">Save picks for ${name}</button>
+  </div>`;
+
+  return html;
+}
+
+
 function attachLogin() {
   document.getElementById('l_submit').onclick = handleLogin;
   document.getElementById('l_toggle').onclick = () => { regMode = !regMode; loginError = ''; render(); };
@@ -1127,6 +1195,70 @@ function attachMain() {
   document.querySelectorAll('.tab').forEach(t => {
     t.onclick = () => { view = t.dataset.tab; saveMsg = ''; render(); };
   });
+
+  // Admin entry picker
+  const adminEntrySelect = document.getElementById('admin_entry_select');
+  if (adminEntrySelect) {
+    adminEntrySelect.onchange = () => {
+      const eid = adminEntrySelect.value;
+      const editor = document.getElementById('admin_picks_editor');
+      if (editor) editor.innerHTML = eid ? renderAdminPicksEditor(eid) : '';
+      if (eid) attachAdminPicksSave();
+    };
+  }
+
+  function attachAdminPicksSave() {
+    document.querySelectorAll('[data-action="admin_save_picks"]').forEach(btn => {
+      btn.onclick = async () => {
+        const entryId = btn.dataset.entry;
+        const userId = btn.dataset.userid;
+        const entry = allEntries.find(e => e.id === entryId);
+        const owner = profiles[userId];
+        const ALL_SERIES = [
+          {rid:'r1',sid:'e1'},{rid:'r1',sid:'e2'},{rid:'r1',sid:'e3'},{rid:'r1',sid:'e4'},
+          {rid:'r1',sid:'w1'},{rid:'r1',sid:'w2'},{rid:'r1',sid:'w3'},{rid:'r1',sid:'w4'},
+          {rid:'r2',sid:'r2_s1'},{rid:'r2',sid:'r2_s2'},{rid:'r2',sid:'r2_s3'},{rid:'r2',sid:'r2_s4'},
+          {rid:'r3',sid:'r3_s1'},{rid:'r3',sid:'r3_s2'},{rid:'r4',sid:'r4_s1'},
+        ];
+        const upserts = [];
+        ALL_SERIES.forEach(({rid,sid}) => {
+          const w = document.getElementById(`adm_pw_${rid}_${sid}`)?.value;
+          const g = document.getElementById(`adm_pg_${rid}_${sid}`)?.value;
+          if (w) upserts.push({ entry_id: entryId, user_id: userId, round_id: rid, series_id: sid, winner: w, games: g || null });
+        });
+        const tbVal = document.getElementById(`adm_tb_${entryId}`)?.value;
+        btn.textContent = 'Saving...';
+        btn.disabled = true;
+        try {
+          // Admin bypass: use service-level delete by entry_id only
+          // We need to delete all picks for this entry regardless of user_id
+          // Use a direct match on entry_id — admin can delete because the RLS allows
+          // users to delete their own, but admin needs to use a workaround:
+          // Update each pick instead of delete+insert
+          if (upserts.length > 0) {
+            // Try per-row update first
+            for (const u of upserts) {
+              await sb.from('picks')
+                .upsert(u, { onConflict: 'entry_id,round_id,series_id' });
+            }
+          }
+          if (tbVal) {
+            await sb.from('tiebreakers').upsert(
+              { entry_id: entryId, user_id: userId, goals: parseInt(tbVal) },
+              { onConflict: 'entry_id' }
+            );
+          }
+          await refreshData();
+          btn.textContent = `Saved for ${owner?.username || '?'}!`;
+          setTimeout(() => { btn.textContent = `Save picks for ${owner?.username || '?'}`; btn.disabled = false; }, 3000);
+        } catch(err) {
+          alert('Admin save failed: ' + err.message);
+          btn.textContent = `Save picks for ${owner?.username || '?'}`;
+          btn.disabled = false;
+        }
+      };
+    });
+  }
 
   // Entry tab switching
   document.querySelectorAll('.entry-tab').forEach(btn => {
@@ -1206,8 +1338,8 @@ function attachMain() {
       }
     });
 
-    const tbEl = document.getElementById('tb_input_mobile') || document.getElementById('tb_input');
-    const tbValue = tbEl?.value ? parseInt(tbEl.value) : null;
+    const tbEl = document.getElementById('tb_input') || document.getElementById('tb_input_mobile');
+    const tbValue = tbEl?.value?.trim() ? parseInt(tbEl.value.trim()) : null;
 
     // Require all picked winners to also have games selected
     if (missing.length > 0) {
